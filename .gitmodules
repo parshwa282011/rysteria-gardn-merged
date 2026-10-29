@@ -1,6 +1,8 @@
 [submodule "gardn"]
     path = gardn
     url = https://github.com/parshwa282011/gardn.git
+    branch = master
 [submodule "rysteria"]
     path = rrolf
     url = https://github.com/parshwa282011/rrolf.git
+    bracnh = gardn-update
