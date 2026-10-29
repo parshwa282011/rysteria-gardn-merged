@@ -127,9 +127,11 @@ for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
 done
 
 if [ "$skip_clients" = 0 ]; then
+    # the page, fonts, logo and platform.js come from Client/public; the built
+    # rrolf-client.js / .wasm replace the copies that may sit there from old builds
     run mkdir -p "$RS_TARGET/rrolf-client"
-    run cp "$RS_WORK/rrolf-client/rrolf-client" "$RS_WORK/rrolf-client/rrolf-client.wasm" "$RS_TARGET/rrolf-client/"
-    run cp "$RS_ROOT/rrolf/RivetStaticPage/index.html" "$RS_TARGET/rrolf-client/index.html"
+    run cp -R "$RS_ROOT/rrolf/Client/public/." "$RS_TARGET/rrolf-client/"
+    run cp "$RS_WORK/rrolf-client/rrolf-client.js" "$RS_WORK/rrolf-client/rrolf-client.wasm" "$RS_TARGET/rrolf-client/"
 fi
 
 # .env last: each file is composed from ~/.rysteria-secrets/ after its folder exists
