@@ -21,6 +21,7 @@ done
 detect_platform
 setup_build_env
 load_servers
+secrets_import
 check_secrets_ready
 
 need cmake git

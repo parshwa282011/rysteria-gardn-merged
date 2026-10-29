@@ -10,7 +10,7 @@ does and what you should see when it worked. Nothing here asks you to edit code.
       |
       |  https://game.parshwa.blog          rrolf client  +  gardn (/gardn/)
       |  https://api-game.parshwa.blog      master server (accounts, logins, saves)
-      |  wss://hc-game / pvp-game / garden-game / ctf-game .parshwa.blog   rrolf game servers
+      |  wss://hc-game / pvp-game / ga-game / ctf-game .parshwa.blog   rrolf game servers
       v
  Cloudflare  ----(tunnel, no open ports)---->  your machine
                                                  |
@@ -53,10 +53,13 @@ test -f gardn/Server/Master.hh                       && echo "gardn: OK"        
 
 All three must say OK. If one says MISSING, that part is not on the branch you
 are about to deploy and **logins will not work** (players would be kicked when
-they try to join). The rrolf pieces are in the rrolf commit `79ce47c8`
-(`git -C rrolf show --stat 79ce47c8`); the branch `gardn-update` currently only
-has the master server and the login screen files from it. Merge or port those
-files first (or ask me to do it), then continue.
+they try to join).
+
+On `gardn-update` this integration is done: the game server and client use the
+C master (accounts with signup/login, PL-T / PL-P tokens, saves per account).
+CrazyGames linking, transfer codes and the in-game "link Discord" relay of the
+old Node master are switched off for now; the Account tab has "Link Discord"
+(through the master's login) and "Log out" instead.
 
 ## Step 1: get the code
 
@@ -210,8 +213,8 @@ working right now" in the game. That is expected for now.
    cloudflared tunnel route dns rysteria game.parshwa.blog
    cloudflared tunnel route dns rysteria hc-game.parshwa.blog
    cloudflared tunnel route dns rysteria pvp-game.parshwa.blog
-   cloudflared tunnel route dns rysteria garden-game.parshwa.blog
-   cloudflared tunnel route dns rysteria tdm-game.parshwa.blog
+   cloudflared tunnel route dns rysteria ga-game.parshwa.blog
+   cloudflared tunnel route dns rysteria ctf-game.parshwa.blog
    ```
    (If a hostname already exists in Cloudflare DNS, delete that old record first.)
 
@@ -229,7 +232,7 @@ into `builds/<os>-<arch>/`. One folder per server, each with its own `.env`:
 
 ```
 builds/macos-arm64/   (or debian-amd64, debian-arm64 ...)
-  master/  rrolf-hc/  rrolf-pvp/  rrolf-garden/  rrolf-tdm/  gardn/  edge/  rrolf-client/  run/
+  master/  rrolf-hc/  rrolf-pvp/  rrolf-garden/  rrolf-ctf/  gardn/  edge/  rrolf-client/  run/
 ```
 Expect 10-30 minutes the first time (the WebAssembly parts are slow). It stops
 with a clear message if the database address is still the placeholder.

@@ -193,6 +193,29 @@ write_if_missing() {
     chmod 600 "$file"
 }
 
+# <repo>/secrets/*.env is where you edit the values (it is git-ignored). Every
+# run copies those files into the real secrets directory (~/.rysteria-secrets,
+# mode 700/600), which is what the builds read.
+secrets_import() {
+    local src="$RS_ROOT/secrets" f
+    [ -d "$src" ] || return 0
+    if [ "$RS_DRY_RUN" != 1 ]; then
+        umask 077
+        mkdir -p "$RS_SECRETS_DIR"
+        chmod 700 "$RS_SECRETS_DIR"
+    fi
+    for f in "$src"/*.env; do
+        [ -f "$f" ] || continue
+        log "importing $(basename "$f") from $src"
+        if [ "$RS_DRY_RUN" = 1 ]; then
+            printf '[dry-run] cp %q %q\n' "$f" "$RS_SECRETS_DIR/"
+        else
+            cp -f "$f" "$RS_SECRETS_DIR/$(basename "$f")"
+            chmod 600 "$RS_SECRETS_DIR/$(basename "$f")"
+        fi
+    done
+}
+
 secrets_init() {
     load_servers
     log "secrets directory $RS_SECRETS_DIR"
@@ -203,6 +226,7 @@ secrets_init() {
         mkdir -p "$RS_SECRETS_DIR"
         chmod 700 "$RS_SECRETS_DIR"
     fi
+    secrets_import
     local domain="${DOMAIN:-parshwa.blog}"
 
     write_if_missing "$RS_SECRETS_DIR/common.env" <<EOF
