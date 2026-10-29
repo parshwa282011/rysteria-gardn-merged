@@ -21,5 +21,5 @@ fi
 
 log "git pull ($RS_REPO_URL)"
 run git -C "$RS_ROOT" pull --ff-only
-run git -C "$RS_ROOT" submodule sync --recursive
-run git -C "$RS_ROOT" submodule update --init --recursive
+run git -C "$RS_ROOT" submodule sync
+run git -C "$RS_ROOT" submodule update --init

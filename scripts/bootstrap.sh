@@ -29,6 +29,7 @@ if [ -d "$INSTALL_DIR/.git" ]; then
     echo "==> $INSTALL_DIR exists, using it"
 else
     echo "==> cloning $REPO_URL into $INSTALL_DIR"
-    git clone --recurse-submodules "$REPO_URL" "$INSTALL_DIR"
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    git -C "$INSTALL_DIR" submodule update --init
 fi
 exec "$INSTALL_DIR/scripts/$os/setup.sh" "$@"

@@ -74,7 +74,7 @@ committed and pushed to the repository), or, if you already cloned it:
 ```sh
 cd rysteria-gardn-merged
 git pull
-git submodule update --init --recursive
+git submodule update --init
 ```
 Pick the folder for your system and use it for **every** command below:
 
