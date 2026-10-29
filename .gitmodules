@@ -1,0 +1,6 @@
+[submodule "gardn"]
+    path = gardn
+    url = https://github.com/parshwa282011/gardn.git
+[submodule "rysteria"]
+    path = rrolf
+    url = https://github.com/parshwa282011/rrolf.git
