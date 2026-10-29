@@ -87,8 +87,12 @@ if [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
             echo "ingress:"
             for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
                 [ "${SV_HOST[$i]}" = "-" ] && continue
-                echo "  - hostname: ${SV_HOST[$i]}.$domain"
-                echo "    service: http://127.0.0.1:${SV_PORT[$i]}"
+                # several hostnames may share one server: "hc-game,default-game"
+                IFS=',' read -ra hosts <<<"${SV_HOST[$i]}"
+                for h in "${hosts[@]}"; do
+                    echo "  - hostname: $h.$domain"
+                    echo "    service: http://127.0.0.1:${SV_PORT[$i]}"
+                done
             done
             echo "  - service: http_status:404"
         } >"$tunnel_yml"
