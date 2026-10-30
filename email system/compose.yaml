@@ -1,0 +1,55 @@
+name: email-system
+
+services:
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: ${MAIL_HOSTNAME:?set MAIL_HOSTNAME in .env}
+    domainname: ${MAIL_DOMAIN:?set MAIL_DOMAIN in .env}
+    env_file: mailserver.env
+    environment:
+      - TZ=${TZ:-UTC}
+      - POSTMASTER_ADDRESS=postmaster@${MAIL_DOMAIN}
+    ports:
+      - "25:25"     # SMTP, server to server (inbound mail from the internet)
+      - "465:465"   # SMTPS, implicit TLS submission
+      - "587:587"   # submission, STARTTLS
+      - "143:143"   # IMAP, STARTTLS
+      - "993:993"   # IMAPS, implicit TLS
+    volumes:
+      - ./docker-data/dms/mail-data/:/var/mail/
+      - ./docker-data/dms/mail-state/:/var/mail-state/
+      - ./docker-data/dms/mail-logs/:/var/log/mail/
+      - ./docker-data/dms/config/:/tmp/docker-mailserver/
+      - ./docker-data/certbot/etc/:/etc/letsencrypt/:ro
+      - /etc/localtime:/etc/localtime:ro
+    restart: always
+    stop_grace_period: 1m
+    cap_add:
+      - NET_ADMIN   # needed by fail2ban
+    networks:
+      default:
+        aliases:
+          # lets webmail reach the mail server by its public name, so the TLS
+          # certificate matches and no hairpin NAT is needed
+          - ${MAIL_HOSTNAME}
+
+  roundcube:
+    image: roundcube/roundcubemail:latest-apache
+    container_name: roundcube
+    depends_on:
+      - mailserver
+    environment:
+      - ROUNDCUBEMAIL_DB_TYPE=sqlite
+      - ROUNDCUBEMAIL_DEFAULT_HOST=tls://${MAIL_HOSTNAME}
+      - ROUNDCUBEMAIL_DEFAULT_PORT=143
+      - ROUNDCUBEMAIL_SMTP_SERVER=tls://${MAIL_HOSTNAME}
+      - ROUNDCUBEMAIL_SMTP_PORT=587
+      - ROUNDCUBEMAIL_PLUGINS=archive,zipdownload
+      - ROUNDCUBEMAIL_SKIN=elastic
+    volumes:
+      - ./docker-data/roundcube/db/:/var/roundcube/db/
+    ports:
+      # bound to localhost; put a reverse proxy or a Cloudflare tunnel in front
+      - "127.0.0.1:${WEBMAIL_PORT:-8090}:80"
+    restart: always

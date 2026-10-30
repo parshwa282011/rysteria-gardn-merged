@@ -234,6 +234,9 @@ secrets_init() {
 DOMAIN=$domain
 # 1 = run cloudflared after the servers are up (setup.sh installs it)
 CLOUDFLARED_ENABLED=0
+# 1 = run.sh also starts the mail server (the "email system" folder) and exposes
+# its webmail through the tunnel. scripts/<os>/mail.sh setup turns this on.
+MAIL_ENABLED=0
 TUNNEL_NAME=rysteria
 # the credentials json that "cloudflared tunnel create" wrote
 TUNNEL_CREDENTIALS=$HOME/.cloudflared/rysteria.json
@@ -260,6 +263,8 @@ EOF
         env_set "$RS_SECRETS_DIR/master.env" DISCORD_REDIRECT_URI "https://api-game.$domain/oauth/discord/callback"
         warn "edit $RS_SECRETS_DIR/master.env: database URI and Discord keys"
     fi
+
+    mail_secrets_init "$domain"
 
     local i name kind arg port
     for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
@@ -291,6 +296,30 @@ EOF
     done
 }
 
+# mail.env: settings for the mail server in "email system/". mail.sh copies the
+# parts docker compose needs into "email system/.env".
+mail_secrets_init() {
+    local domain="$1"
+    write_if_missing "$RS_SECRETS_DIR/mail.env" <<EOF
+# Mail server. Fill this in, then run scripts/<os>/mail.sh setup
+MAIL_DOMAIN=$domain
+MAIL_HOSTNAME=mail.$domain
+# blank = the public IPv4 address is detected automatically
+SERVER_IP=
+# Let's Encrypt writes here about certificate problems
+CERT_EMAIL=
+# Cloudflare API token with Zone > DNS > Edit for $domain (creates the DNS records)
+CLOUDFLARE_API_TOKEN=
+# webmail is served at https://<WEBMAIL_HOST>.$domain through the tunnel
+WEBMAIL_HOST=webmail
+WEBMAIL_PORT=8090
+TZ=UTC
+# mailboxes to create, space separated address:password, for example
+# MAIL_ACCOUNTS=you@$domain:change-me noreply@$domain:change-me
+MAIL_ACCOUNTS=
+EOF
+}
+
 check_secrets_ready() {
     [ -d "$RS_SECRETS_DIR" ] || die "no $RS_SECRETS_DIR: run scripts/$RS_OS/setup.sh first"
     [ -f "$RS_SECRETS_DIR/master.env" ] || die "missing $RS_SECRETS_DIR/master.env"
@@ -309,6 +338,8 @@ check_secrets_ready() {
 }
 
 common_get() { env_get "$RS_SECRETS_DIR/common.env" "$1"; }
+mail_get() { env_get "$RS_SECRETS_DIR/mail.env" "$1"; }
+mail_enabled() { [ "$(common_get MAIL_ENABLED)" = 1 ]; }
 
 # Writes <dest>/.env for one server. Servers only receive what they need: game
 # servers and gardn get the shared secret and the master address, never the
