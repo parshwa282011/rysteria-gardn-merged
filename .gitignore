@@ -1,2 +1,4 @@
 builds/
 secrets/
+dual-server-syncing/node_modules/
+dual-server-syncing/nodes.conf

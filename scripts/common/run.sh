@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Starts everything that build.sh produced, detached, in this order:
 #   master (waits for /health) -> rrolf game servers -> gardn -> edge
+#   -> syncd, only if SYNC_ENABLED=1 in ~/.rysteria-secrets/sync.env
 #   -> cloudflared, only if CLOUDFLARED_ENABLED=1 in ~/.rysteria-secrets/common.env
+#      (with SYNC_ENABLED=1 only on the primary machine, see dual-server-syncing/)
 # Each process runs in its own builds/<os>-<arch>/<name>/ folder and reads the
 # .env sitting there. Logs and pid files: builds/<os>-<arch>/run/
 #
@@ -57,7 +59,15 @@ wait_for_master() {
     die "master did not become healthy, see $RS_RUN/master.log"
 }
 
-for kind in master rrolf gardn edge; do
+ROLE_FILE="$RS_RUN/sync.role"
+
+# With SYNC_ENABLED=1 only the primary gets the tunnel. syncd decides who that is
+# and records it in $ROLE_FILE (it calls this script again after taking over).
+is_primary_here() {
+    ! sync_enabled || [ "$(cat "$ROLE_FILE" 2>/dev/null)" = primary ]
+}
+
+for kind in master rrolf gardn edge sync; do
     for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
         [ "${SV_KIND[$i]}" = "$kind" ] || continue
         name="${SV_NAME[$i]}"
@@ -69,18 +79,26 @@ for kind in master rrolf gardn edge; do
         rrolf) start "$name" ./rrolf-server ;;
         gardn) start "$name" node gardn-server.js ;;
         edge) start "$name" node edge.js ;;
+        sync)
+            sync_enabled || continue
+            # a role left over from before a reboot or crash must not start the tunnel
+            is_running "$name" || run rm -f "$ROLE_FILE"
+            start "$name" node syncd.js
+            ;;
         esac
     done
 done
 
 # ------------------------------------------------------------------ mail server
 # "email system/" (docker). A failure here must not take the game servers down.
-if mail_enabled; then
+if mail_enabled && is_primary_here; then
     "$RS_COMMON_DIR/mail.sh" start || warn "mail server did not start (see: scripts/$RS_OS/mail.sh status)"
 fi
 
 # ----------------------------------------------------------------- cloudflared
-if [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
+if [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ] && ! is_primary_here; then
+    log "backup mode: no tunnel on this machine (syncd starts it if the primary fails). state: scripts/$RS_OS/sync.sh status"
+elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     need cloudflared
     domain="$(common_get DOMAIN)"
     tunnel_name="$(common_get TUNNEL_NAME)"
@@ -111,11 +129,11 @@ if [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     if is_running cloudflared; then
         log "cloudflared already running"
     elif [ "$RS_DRY_RUN" = 1 ]; then
-        echo "[dry-run] nohup cloudflared tunnel --config $tunnel_yml run $tunnel_name"
+        echo "[dry-run] nohup cloudflared tunnel --protocol http2 --config $tunnel_yml run $tunnel_name"
     else
         (
             cd "$RS_RUN" || exit 1
-            nohup cloudflared tunnel --config "$tunnel_yml" run "$tunnel_name" >>"$RS_RUN/cloudflared.log" 2>&1 &
+            nohup cloudflared tunnel --protocol http2 --config "$tunnel_yml" run "$tunnel_name" >>"$RS_RUN/cloudflared.log" 2>&1 &
             echo $! >"$(pid_file cloudflared)"
         )
     fi

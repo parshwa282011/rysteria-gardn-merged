@@ -204,7 +204,7 @@ secrets_import() {
         mkdir -p "$RS_SECRETS_DIR"
         chmod 700 "$RS_SECRETS_DIR"
     fi
-    for f in "$src"/*.env; do
+    for f in "$src"/*.env "$src"/nodes.conf; do
         [ -f "$f" ] || continue
         log "importing $(basename "$f") from $src"
         if [ "$RS_DRY_RUN" = 1 ]; then
@@ -247,6 +247,24 @@ MASTER_TLS=0
 # baked into the clients at build time
 CLIENT_API_URL=https://api-game.$domain/
 GARDN_WS_URL=wss://game.$domain/gardn/
+EOF
+
+    # dual-server-syncing: copy this file unchanged to every machine
+    write_if_missing "$RS_SECRETS_DIR/sync.env" <<EOF
+# Backup / failover between machines (see dual-server-syncing/README.md).
+# 1 = this machine takes part: run.sh starts syncd, and only the primary gets the tunnel.
+SYNC_ENABLED=0
+# the password a backup sends to the primary's /backup. Same value on every machine.
+CLONE_SECRET=$(random_secret)
+# seconds between checks (default 30) / failed 5-second probes before a node counts as down (3)
+# SYNC_INTERVAL=30
+# SYNC_FAIL_PROBES=3
+# extra seconds a node waits for each better node before taking over (45)
+# SYNC_STAGGER=45
+# a backup whose last sync is older than this many seconds never takes over by itself (900)
+# SYNC_MAX_STALE=900
+# 1 = the master listens on the LAN so the other machines can check its /health
+SYNC_LAN_HEALTH=1
 EOF
 
     local master_example="$RS_ROOT/rrolf/MasterServer/c/.env.example"
@@ -338,6 +356,19 @@ check_secrets_ready() {
 }
 
 common_get() { env_get "$RS_SECRETS_DIR/common.env" "$1"; }
+sync_get() { env_get "$RS_SECRETS_DIR/sync.env" "$1"; }
+sync_enabled() { [ "$(sync_get SYNC_ENABLED)" = 1 ]; }
+
+# This machine's name in dual-server-syncing/nodes.conf: $SYNC_NODE, else the
+# first line of ~/.rysteria-secrets/sync-node, else the short host name.
+sync_node_name() {
+    local name="${SYNC_NODE:-}"
+    if [ -z "$name" ] && [ -f "$RS_SECRETS_DIR/sync-node" ]; then
+        name="$(head -n1 "$RS_SECRETS_DIR/sync-node")"
+    fi
+    [ -n "$name" ] || name="$(hostname -s 2>/dev/null || hostname)"
+    printf '%s' "$name" | tr 'A-Z' 'a-z' | tr -d '[:space:]'
+}
 mail_get() { env_get "$RS_SECRETS_DIR/mail.env" "$1"; }
 mail_enabled() { [ "$(common_get MAIL_ENABLED)" = 1 ]; }
 
@@ -356,6 +387,32 @@ compose_env() {
         case "$kind" in
         master)
             cat "$RS_SECRETS_DIR/master.env" >"$env_file"
+            # the master names itself in /health and serves /backup to the backups
+            env_set "$env_file" NODE_NAME "$(sync_node_name)"
+            if sync_enabled; then
+                env_set "$env_file" CLONE_SECRET "$(sync_get CLONE_SECRET)"
+                # the other machines check this one's /health over the LAN
+                [ "$(sync_get SYNC_LAN_HEALTH)" = 0 ] || env_set "$env_file" BIND_ADDRESS ""
+            fi
+            ;;
+        sync)
+            {
+                cat "$RS_SECRETS_DIR/sync.env" 2>/dev/null || true
+                echo "NODE_NAME=$(sync_node_name)"
+                echo "DB_TYPE=$(env_get "$RS_SECRETS_DIR/master.env" DB_TYPE)"
+                echo "POSTGRES_URI=$(env_get "$RS_SECRETS_DIR/master.env" POSTGRES_URI)"
+                echo "DOMAIN=$(common_get DOMAIN)"
+                echo "MASTER_PORT=$(common_get MASTER_PORT)"
+                echo "CLOUDFLARED_ENABLED=$(common_get CLOUDFLARED_ENABLED)"
+                echo "RS_ROOT=$RS_ROOT"
+                echo "RS_RUN=$RS_RUN"
+                echo "RS_OS=$RS_OS"
+                # the machine list travels with the secrets; the repo copy is the fallback
+                local nodes="$RS_SECRETS_DIR/nodes.conf"
+                [ -f "$nodes" ] || nodes="$RS_ROOT/dual-server-syncing/nodes.conf"
+                echo "SYNC_NODES_FILE=$nodes"
+                echo "SYNC_STATE_FILE=$RS_SECRETS_DIR/sync-state.json"
+            } >"$env_file"
             ;;
         rrolf)
             {

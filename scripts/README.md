@@ -14,6 +14,8 @@ run.sh           start master, game servers, gardn, edge; cloudflared if enabled
 stop.sh          stop them (players and saves are flushed first)
 clean-builds.sh  delete builds/ (only that) so the next build starts clean
 up.sh            setup + build + run
+sync.sh          backup / failover between machines: init | status | promote
+                 (see ../dual-server-syncing/README.md)
 mail.sh          the mail server in "email system/": setup | start | stop | dns | status
 ```
 Every script takes `--dry-run` (print, don't do). `bootstrap.sh` / `windows\bootstrap.ps1`
@@ -40,6 +42,12 @@ Edit `common/servers.conf` to add or remove processes (name, kind, biome, port,
 public hostname). `edge` serves the rrolf client at `/` and gardn under `/gardn/`
 on one hostname; with cloudflared enabled, `run.sh` generates the tunnel ingress
 from the same file.
+
+## Backup servers
+
+With `SYNC_ENABLED=1` in `sync.env`, `run.sh` also starts `syncd` and only the primary machine
+gets the cloudflared tunnel; the others run the full stack as copies and take over when the
+primary fails. Setup and rules: `dual-server-syncing/README.md`.
 
 ## Mail server
 

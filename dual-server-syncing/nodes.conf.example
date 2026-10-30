@@ -1,0 +1,16 @@
+# The machines that can run the game, best first. The first line is the one that
+# takes over first when the primary dies; every other node waits its turn.
+# At most 5 lines (1 primary + 4 backups). Copy this file to nodes.conf.
+#
+# name   os       lan address (health checks)   ssh target (to stop it)   repo folder on that machine
+#
+# name   = what that machine calls itself: its short host name, or the contents
+#          of ~/.rysteria-secrets/sync-node (lower case)
+# os     = macos | debian (Debian, Ubuntu, Raspberry Pi OS) | windows
+#          picks which stop script is run over ssh: scripts/<os>/stop.sh or stop.ps1
+# lan    = host[:port] other machines use to reach this master directly (default port
+#          55554). "-" = none: then only the public address is checked.
+# ssh    = user@host with key login (no password prompt). "-" = cannot be stopped remotely.
+# repo   = the folder of this repository on that machine
+c1       macos    c1.local                      parswha@c1.local          /Users/parswha/lolll
+pi       debian   raspberrypi.local             pi@raspberrypi.local      /home/pi/lolll

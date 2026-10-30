@@ -38,6 +38,9 @@ stop_one() {
     rm -f "$file"
 }
 
+# syncd first: it must not see the servers go away and start them again
+stop_one syncd
+run rm -f "$RS_RUN/sync.role"
 stop_one cloudflared
 for ((i = ${#SV_NAME[@]} - 1; i >= 0; i--)); do
     stop_one "${SV_NAME[$i]}"

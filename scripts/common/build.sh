@@ -123,6 +123,19 @@ for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
     edge)
         run cp "$RS_COMMON_DIR/edge.js" "$dest/edge.js"
         ;;
+    sync)
+        if sync_enabled; then
+            need node npm
+            for f in syncd.js store.js util.js package.json package-lock.json; do
+                run cp "$RS_ROOT/dual-server-syncing/$f" "$dest/"
+            done
+            if [ "$RS_DRY_RUN" = 1 ]; then
+                echo "[dry-run] npm install pg in $dest"
+            elif [ ! -d "$dest/node_modules/pg" ]; then
+                (cd "$dest" && npm install --omit=dev --no-audit --no-fund)
+            fi
+        fi
+        ;;
     esac
 done
 
