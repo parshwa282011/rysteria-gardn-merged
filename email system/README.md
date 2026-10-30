@@ -3,7 +3,7 @@
 A real mail server for your domain, in Docker:
 
 - **docker-mailserver**: Postfix (SMTP), Dovecot (IMAP), Rspamd (spam filter, DKIM signing, SPF/DKIM/DMARC checks), fail2ban.
-- **Roundcube**: webmail, at `http://127.0.0.1:8080` (change with `WEBMAIL_PORT`).
+- **Roundcube**: webmail, at `http://127.0.0.1:8989` (change with `WEBMAIL_PORT`).
 
 ## What you need first
 
@@ -49,12 +49,12 @@ The first start takes a minute or two. Check with `./manage.sh status` and `./ma
 
 | What | Settings |
 |------|----------|
-| Webmail | `http://127.0.0.1:8080`, log in with the full address and password |
+| Webmail | `http://127.0.0.1:8989`, log in with the full address and password |
 | IMAP (read mail) | host `mail.parshwa.blog`, port 993 (SSL/TLS) or 143 (STARTTLS) |
 | SMTP (send mail) | host `mail.parshwa.blog`, port 465 (SSL/TLS) or 587 (STARTTLS), username = full address |
 
 To reach webmail from outside, put a reverse proxy or a Cloudflare tunnel hostname (for example `webmail.parshwa.blog`)
-in front of `127.0.0.1:8080`. Webmail is plain HTTP and works through a tunnel; the mail ports do not.
+in front of `127.0.0.1:8989`. Webmail is plain HTTP and works through a tunnel; the mail ports do not.
 
 ## Sending from the game
 

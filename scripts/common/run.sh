@@ -73,6 +73,12 @@ for kind in master rrolf gardn edge; do
     done
 done
 
+# ------------------------------------------------------------------ mail server
+# "email system/" (docker). A failure here must not take the game servers down.
+if mail_enabled; then
+    "$RS_COMMON_DIR/mail.sh" start || warn "mail server did not start (see: scripts/$RS_OS/mail.sh status)"
+fi
+
 # ----------------------------------------------------------------- cloudflared
 if [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     need cloudflared
@@ -94,6 +100,11 @@ if [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
                     echo "    service: http://127.0.0.1:${SV_PORT[$i]}"
                 done
             done
+            # webmail for the mail server (SMTP/IMAP cannot go through a tunnel)
+            if mail_enabled && [ -n "$(mail_get WEBMAIL_HOST)" ]; then
+                echo "  - hostname: $(mail_get WEBMAIL_HOST).$domain"
+                echo "    service: http://127.0.0.1:$(mail_get WEBMAIL_PORT)"
+            fi
             echo "  - service: http_status:404"
         } >"$tunnel_yml"
     fi

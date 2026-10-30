@@ -42,4 +42,7 @@ stop_one cloudflared
 for ((i = ${#SV_NAME[@]} - 1; i >= 0; i--)); do
     stop_one "${SV_NAME[$i]}"
 done
+if mail_enabled; then
+    "$RS_COMMON_DIR/mail.sh" stop || warn "could not stop the mail server"
+fi
 log "stopped"

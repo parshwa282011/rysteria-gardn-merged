@@ -14,6 +14,7 @@ run.sh           start master, game servers, gardn, edge; cloudflared if enabled
 stop.sh          stop them (players and saves are flushed first)
 clean-builds.sh  delete builds/ (only that) so the next build starts clean
 up.sh            setup + build + run
+mail.sh          the mail server in "email system/": setup | start | stop | dns | status
 ```
 Every script takes `--dry-run` (print, don't do). `bootstrap.sh` / `windows\bootstrap.ps1`
 start from an empty machine.
@@ -39,3 +40,14 @@ Edit `common/servers.conf` to add or remove processes (name, kind, biome, port,
 public hostname). `edge` serves the rrolf client at `/` and gardn under `/gardn/`
 on one hostname; with cloudflared enabled, `run.sh` generates the tunnel ingress
 from the same file.
+
+## Mail server
+
+`mail.sh setup` (macOS: `scripts/macos/mail.sh setup`) sets up the "email system" folder
+in one go: creates the DNS records in Cloudflare, routes `webmail.<domain>` through the
+tunnel, gets the TLS certificate, starts the stack, creates DKIM and the mailboxes.
+Fill in `~/.rysteria-secrets/mail.env` first (or `secrets/mail.env` in the repo, which
+is copied over on every run): `CERT_EMAIL`, `CLOUDFLARE_API_TOKEN` (Zone > DNS > Edit)
+and optionally `MAIL_ACCOUNTS`. After that `run.sh` / `stop.sh` start and stop the mail
+server too. Only webmail goes through the tunnel; the mail ports (25, 465, 587, 143,
+993, plus 80 for the certificate) must be open on your router.

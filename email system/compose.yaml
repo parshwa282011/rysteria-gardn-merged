@@ -51,5 +51,5 @@ services:
       - ./docker-data/roundcube/db/:/var/roundcube/db/
     ports:
       # bound to localhost; put a reverse proxy or a Cloudflare tunnel in front
-      - "127.0.0.1:${WEBMAIL_PORT:-8090}:80"
+      - "127.0.0.1:${WEBMAIL_PORT:-8989}:80"
     restart: always

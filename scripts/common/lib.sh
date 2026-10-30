@@ -312,7 +312,7 @@ CERT_EMAIL=
 CLOUDFLARE_API_TOKEN=
 # webmail is served at https://<WEBMAIL_HOST>.$domain through the tunnel
 WEBMAIL_HOST=webmail
-WEBMAIL_PORT=8090
+WEBMAIL_PORT=8989
 TZ=UTC
 # mailboxes to create, space separated address:password, for example
 # MAIL_ACCOUNTS=you@$domain:change-me noreply@$domain:change-me
