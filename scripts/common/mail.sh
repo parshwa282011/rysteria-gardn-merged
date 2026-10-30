@@ -130,7 +130,7 @@ cmd_setup() {
     fi
 
     if [ "$RS_DRY_RUN" = 1 ] || ! has_certificate; then
-        log "TLS certificate (Let's Encrypt, needs port 80 open to the internet)"
+        log "TLS certificate (Let's Encrypt; DNS challenge with the Cloudflare token, else port 80)"
         run "$MAIL_DIR/manage.sh" cert
     fi
 

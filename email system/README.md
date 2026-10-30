@@ -10,7 +10,7 @@ A real mail server for your domain, in Docker:
 This only works on a machine that the internet can reach directly. Mail does not travel through
 Cloudflare tunnels, and home ISPs usually block port 25.
 
-1. A server (VPS) with a public IPv4 address, Docker, and these ports open: **25, 465, 587, 143, 993**, plus **80** while getting a certificate.
+1. A server (VPS) with a public IPv4 address, Docker, and these ports open: **25, 465, 587, 143, 993**, plus **80** while getting a certificate (not needed when `CLOUDFLARE_API_TOKEN` is set: the certificate is then proven through a DNS record).
 2. A domain (the default is `parshwa.blog`).
 3. A VPS provider that allows outbound port 25 and lets you set **reverse DNS (PTR)**. Without a PTR record
    that matches `mail.<your domain>`, Gmail and others will reject or spam-folder your mail.
@@ -21,7 +21,7 @@ Cloudflare tunnels, and home ISPs usually block port 25.
 cd "email system"
 cp .env.example .env        # fill in MAIL_DOMAIN, MAIL_HOSTNAME, SERVER_IP, CERT_EMAIL
 ./manage.sh dns             # shows the DNS records to create (do the A and MX records first)
-./manage.sh cert            # gets a Let's Encrypt certificate (port 80 must be free)
+./manage.sh cert            # gets a Let's Encrypt certificate (DNS challenge if a Cloudflare token is set)
 ./manage.sh up              # starts the mail server and webmail
 ./manage.sh add you@parshwa.blog
 ./manage.sh add noreply@parshwa.blog
@@ -89,5 +89,5 @@ A cron line for renewal, run as a user that can use Docker:
 
 - **Mail to Gmail goes to spam or bounces**: check PTR, SPF, DKIM and DMARC. Send a test to <https://www.mail-tester.com>.
 - **Port 25 closed**: your provider blocks it. Ask them to unblock it, or pick another provider.
-- **`up` says no certificate**: run `./manage.sh cert`; port 80 must reach this machine and the A record must already point to it.
+- **`up` says no certificate**: run `./manage.sh cert`. With a Cloudflare token it needs no open port; without one, port 80 must reach this machine and the A record must point to it.
 - **Cannot log in**: use the full address as the username, not just the name.

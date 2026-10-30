@@ -13,13 +13,31 @@ set -a; . ./.env; set +a
 
 DMS=mailserver
 dms() { docker exec -i "$DMS" setup "$@"; }
+
+# Runs certbot in Docker. With CLOUDFLARE_API_TOKEN set it proves ownership of the
+# domain through a DNS record (no open port 80, no public IP needed); otherwise it
+# starts a temporary web server on port 80, which must be reachable from the internet.
+certbot_run() {
+  local sub="$1"; shift
+  local vols=(-v "$PWD/docker-data/certbot/etc:/etc/letsencrypt" -v "$PWD/docker-data/certbot/lib:/var/lib/letsencrypt")
+  if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
+    mkdir -p docker-data/certbot/secrets
+    ( umask 077; echo "dns_cloudflare_api_token = $CLOUDFLARE_API_TOKEN" > docker-data/certbot/secrets/cloudflare.ini )
+    docker run --rm "${vols[@]}" -v "$PWD/docker-data/certbot/secrets:/secrets:ro" \
+      certbot/dns-cloudflare "$sub" --dns-cloudflare \
+      --dns-cloudflare-credentials /secrets/cloudflare.ini \
+      --dns-cloudflare-propagation-seconds 30 "$@"
+  else
+    docker run --rm -p 80:80 "${vols[@]}" certbot/certbot "$sub" --standalone "$@"
+  fi
+}
 dms_tty() { docker exec -it "$DMS" setup "$@"; }
 
 usage() {
   cat <<USAGE
 Usage: ./manage.sh <command>
 
-  cert                    get a Let's Encrypt certificate (needs port 80 free and DNS in place)
+  cert                    get a Let's Encrypt certificate (DNS challenge if CLOUDFLARE_API_TOKEN is set, else port 80)
   renew                   renew the certificate and reload the mail server
   up                      start mail server and webmail
   down                    stop everything (mail is kept)
@@ -46,17 +64,10 @@ case "$cmd" in
   cert)
     : "${CERT_EMAIL:?set CERT_EMAIL in .env}"
     mkdir -p docker-data/certbot/etc docker-data/certbot/lib
-    docker run --rm -p 80:80 \
-      -v "$PWD/docker-data/certbot/etc:/etc/letsencrypt" \
-      -v "$PWD/docker-data/certbot/lib:/var/lib/letsencrypt" \
-      certbot/certbot certonly --standalone --non-interactive --agree-tos \
-      -m "$CERT_EMAIL" -d "$MAIL_HOSTNAME"
+    certbot_run certonly --non-interactive --agree-tos -m "$CERT_EMAIL" -d "$MAIL_HOSTNAME"
     ;;
   renew)
-    docker run --rm -p 80:80 \
-      -v "$PWD/docker-data/certbot/etc:/etc/letsencrypt" \
-      -v "$PWD/docker-data/certbot/lib:/var/lib/letsencrypt" \
-      certbot/certbot renew --standalone --non-interactive
+    certbot_run renew --non-interactive
     docker restart "$DMS"
     ;;
   up)
