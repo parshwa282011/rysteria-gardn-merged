@@ -8,6 +8,7 @@
 
 const http = require("http");
 const net = require("net");
+const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -23,6 +24,22 @@ try {
 const PORT = Number(process.env.EDGE_PORT) || 8080;
 const GARDN_PORT = Number(process.env.GARDN_PORT) || 9001;
 const CLIENT_DIR = path.resolve(process.env.CLIENT_DIR || "rrolf-client");
+// run (through sh) when gardn does not answer, at most once every minute: it starts gardn
+// again (scripts/common/restart-one.sh gardn). Unset = never
+const GARDN_RESTART_COMMAND = process.env.GARDN_RESTART_COMMAND || "";
+const GARDN_RESTART_COOLDOWN_MS = 60 * 1000;
+let lastGardnRestart = 0;
+
+function gardnIsDown() {
+    const now = Date.now();
+    if (!GARDN_RESTART_COMMAND || now - lastGardnRestart < GARDN_RESTART_COOLDOWN_MS) return;
+    lastGardnRestart = now;
+    console.log("gardn does not answer: starting it again");
+    execFile("/bin/sh", ["-c", GARDN_RESTART_COMMAND], { timeout: 60000 }, (err, stdout, stderr) => {
+        if (err) console.log(`restarting gardn failed (${err.code}): ${(stderr || stdout || err.message).trim().split("\n").slice(-2).join(" | ")}`);
+        else console.log("gardn started again");
+    });
+}
 
 const TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -70,7 +87,11 @@ function proxyHttp(req, res) {
         res.writeHead(up.statusCode, up.headers);
         up.pipe(res);
     });
-    upstream.on("error", () => res.writeHead(502, { "content-type": "text/plain" }).end("gardn is down\n"));
+    upstream.on("error", () => {
+        gardnIsDown();
+        if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
+        res.end("gardn is down\n");
+    });
     req.pipe(upstream);
 }
 
@@ -104,8 +125,14 @@ server.on("upgrade", (req, socket, head) => {
         if (head && head.length) upstream.write(head);
         socket.pipe(upstream).pipe(socket);
     });
-    upstream.on("error", () => socket.destroy());
+    // whichever side goes away takes the other with it, or half open sockets pile up
+    upstream.on("error", () => {
+        gardnIsDown();
+        socket.destroy();
+    });
+    upstream.on("close", () => socket.destroy());
     socket.on("error", () => upstream.destroy());
+    socket.on("close", () => upstream.destroy());
 });
 
 server.listen(PORT, "127.0.0.1", () => console.log(`edge listening on 127.0.0.1:${PORT}, client ${CLIENT_DIR}, gardn :${GARDN_PORT}`));

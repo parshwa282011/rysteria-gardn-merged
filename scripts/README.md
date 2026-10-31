@@ -46,6 +46,14 @@ public hostname). `edge` serves the rrolf client at `/` and gardn under `/gardn/
 on one hostname; with cloudflared enabled, `run.sh` generates the tunnel ingress
 from the same file.
 
+## gardn
+
+`edge.js` serves `/gardn/*` from the gardn process (the `/gardn` prefix and the query are dropped, as nginx did).
+When gardn does not answer, the edge runs `GARDN_RESTART_COMMAND` (`restart-one.sh gardn`, written into the edge's
+`.env` by `build.sh`) at most once a minute. A page and websocket test of `/gardn/` (the first packet is the version
+hash as a varint, then uuid and PL-P as length prefixed strings) checks it end to end; a wrong PL-P must be closed
+with 4006.
+
 ## A machine without emscripten (the Raspberry Pi)
 
 `build.sh --skip-clients` builds the servers but not the WASM clients (rrolf client, gardn), so that machine keeps

@@ -479,6 +479,10 @@ compose_env() {
                 cat "$RS_SECRETS_DIR/$name.env"
                 echo "CLIENT_DIR=$RS_TARGET/rrolf-client"
                 echo "GARDN_PORT=$(server_port gardn)"
+                # the edge starts gardn again when it does not answer
+                if [ "$(common_get RESTART_DROPPED_SERVERS)" != 0 ]; then
+                    echo "GARDN_RESTART_COMMAND=\"$RS_COMMON_DIR/restart-one.sh\" gardn"
+                fi
             } >"$env_file"
             ;;
         esac

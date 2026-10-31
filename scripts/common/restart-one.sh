@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Starts ONE rrolf game server again. The master server runs this (RESTART_COMMAND
-# in its .env, written by build.sh) when a game server dropped its connection
-# without saying it was stopping, for example because it crashed. The master
-# tries once and gives up if this fails or the server does not come back.
+# Starts ONE rrolf game server (or gardn) again. The master server runs this
+# (RESTART_COMMAND in its .env, written by build.sh) when a game server dropped its
+# connection without saying it was stopping, for example because it crashed. The
+# master tries once and gives up if this fails or the server does not come back.
+# The edge (edge.js) runs it for gardn when gardn does not answer.
 #
 # Usage: scripts/common/restart-one.sh <name>      name as in servers.conf
 # Exit status 0 = started, anything else = it could not be.
@@ -22,9 +23,18 @@ kind=""
 for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
     [ "${SV_NAME[$i]}" = "$name" ] && kind="${SV_KIND[$i]}"
 done
-[ "$kind" = rrolf ] || die "$name is not an rrolf game server in servers.conf"
 dir="$RS_TARGET/$name"
-[ -x "$dir/rrolf-server" ] && [ -f "$dir/.env" ] || die "$dir has no built server: run build.sh"
+case "$kind" in
+rrolf)
+    [ -x "$dir/rrolf-server" ] && [ -f "$dir/.env" ] || die "$dir has no built server: run build.sh"
+    server_cmd=(./rrolf-server)
+    ;;
+gardn)
+    [ -f "$dir/gardn-server.js" ] && [ -f "$dir/.env" ] || die "$dir has no built gardn: run build.sh"
+    server_cmd=(node gardn-server.js)
+    ;;
+*) die "$name is not an rrolf game server or gardn in servers.conf" ;;
+esac
 
 # the process can still exist but be cut off from the master: stop it first
 if is_running "$name"; then
@@ -43,7 +53,7 @@ run mkdir -p "$RS_RUN"
 log "starting $name again"
 (
     cd "$dir" || exit 1
-    nohup ./rrolf-server >>"$RS_RUN/$name.log" 2>&1 &
+    nohup "${server_cmd[@]}" >>"$RS_RUN/$name.log" 2>&1 &
     echo $! >"$(pid_file "$name")"
 )
 sleep 1
