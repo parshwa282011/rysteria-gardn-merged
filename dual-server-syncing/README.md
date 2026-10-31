@@ -72,9 +72,13 @@ players ---> Cloudflare ---> tunnel on the PRIMARY ---> master ---> postgres
    younger than 15 min (`SYNC_MAX_STALE`). A machine that has never synced only takes over
    if it is the first line of `nodes.conf` (a fresh start of the main machine). Otherwise it
    logs `NOT taking over` and waits for a human: `scripts/<os>/sync.sh promote`.
-6. **Fence:** it runs `scripts/<os>/stop.sh` (`stop.ps1` for windows) on the old primary
+6. **Restart once.** Before it replaces the primary it restarts the primary's servers over ssh,
+   `stop.sh --keep-role` then `run.sh` (the old primary stays the primary and gets its tunnel back), once per outage.
+   If `api-game.<domain>/health` answers again within `SYNC_RESTART_WAIT` seconds (default 90) it stays a backup.
+   If ssh cannot reach the machine, or it does not come back, it goes on.
+7. **Fence:** it runs `scripts/<os>/stop.sh` (`stop.ps1` for windows) on the old primary
    over ssh. If ssh fails or the machine is dead, it carries on immediately.
-7. It starts a new "source id" (the other backups will take a fresh snapshot from it), writes
+8. It starts a new "source id" (the other backups will take a fresh snapshot from it), writes
    `primary` to `builds/<os>-<arch>/run/sync.role` and runs `run.sh`, which starts cloudflared.
    It waits until `api-game.<domain>/health` answers with its own name.
 
@@ -110,7 +114,7 @@ node answered (`"node"`) and whether it can serve backups (`"backup"`).
 - `/backup` is protected by `CLONE_SECRET` (constant-time compare, failed attempts are
   rate-limited). Treat it like the other secrets: it lets its holder download every account.
 - Settings (`sync.env`): `SYNC_INTERVAL`, `SYNC_FAIL_PROBES`, `SYNC_STAGGER`, `SYNC_MAX_STALE`,
-  `SYNC_TUNNEL_GRACE`, `SYNC_LAN_HEALTH`.
+  `SYNC_TUNNEL_GRACE`, `SYNC_RESTART_WAIT`, `SYNC_LAN_HEALTH`.
 - Windows machines run everything in WSL2 Ubuntu, so list them as `debian` in `nodes.conf`
   unless you want ssh to reach the Windows host itself (`windows`, runs `stop.ps1`).
 

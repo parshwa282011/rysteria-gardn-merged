@@ -30,6 +30,7 @@ const cfg = {
     stagger: num('SYNC_STAGGER', 45), // extra seconds a node waits per higher-priority node
     tunnelGrace: num('SYNC_TUNNEL_GRACE', 60), // extra wait when the primary itself is fine but its tunnel is not
     maxStale: num('SYNC_MAX_STALE', 900), // a backup older than this never promotes by itself
+    restartWait: num('SYNC_RESTART_WAIT', 90), // seconds the primary gets to serve again after its servers were restarted
     rsRoot: env.RS_ROOT || path.resolve(__dirname, '..'),
     rsRun: env.RS_RUN || '',
     rsOs: env.RS_OS || '',
@@ -191,6 +192,7 @@ async function standbyTick() {
     }
     const pub = await health(`${PUBLIC}/health`);
     if (pub.ok) {
+        restartedThisOutage = false; // the next outage may restart the primary once again
         if (pub.node && pub.node === me.name) return; // our own tunnel, just stopped
         try {
             await pull(pub);
@@ -215,6 +217,42 @@ function eligible() {
     const age = (Date.now() - state.lastSync) / 1000;
     if (age > cfg.maxStale) return { ok: false, why: `its last sync was ${Math.round(age / 60)} min ago (SYNC_MAX_STALE=${cfg.maxStale}s); run "sync.sh promote" to override` };
     return { ok: true };
+}
+
+// Before a backup replaces the primary it restarts the primary's servers over
+// ssh, ONCE per outage (stop.sh keeps the primary role, run.sh starts everything
+// including the tunnel). If the primary serves again within SYNC_RESTART_WAIT
+// seconds nothing is replaced. If ssh fails (the machine is dead) or it does not
+// come back, the backup goes on and takes over. Returns true if it came back.
+let restartedThisOutage = false;
+async function restartPrimary(old) {
+    if (restartedThisOutage) return false;
+    restartedThisOutage = true;
+    if (!old || old === me) return false;
+    if (!old.ssh) {
+        log(`no ssh address for ${old.name}: cannot restart its servers first`);
+        return false;
+    }
+    const remote =
+        old.os === 'windows'
+            ? `powershell -NoProfile -ExecutionPolicy Bypass -File "${old.repo}\\scripts\\windows\\run.ps1"`
+            : `bash -lc ${shq(`cd ${shq(old.repo)} && scripts/${old.os}/stop.sh --keep-role && scripts/${old.os}/run.sh`)}`;
+    log(`restarting the servers of ${old.name} over ssh (${old.ssh}) once, before replacing it`);
+    const r = await sh('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '-o', 'StrictHostKeyChecking=accept-new', old.ssh, remote], { timeout: 300000 });
+    if (r.code !== 0 && r.code !== null && !r.timedOut && /Connection|timed out|refused|No route|Permission denied/i.test(r.out)) {
+        log(`could not reach ${old.name} over ssh (exit ${r.code}): ${r.out.split('\n').slice(-2).join(' | ')}`);
+        return false;
+    }
+    if (r.code !== 0) log(`the restart on ${old.name} exited ${r.code}${r.timedOut ? ' (timed out)' : ''}: ${r.out.split('\n').slice(-2).join(' | ')}`);
+    for (let waited = 0; waited < cfg.restartWait; waited += 5) {
+        await sleep(5000);
+        if ((await health(`${PUBLIC}/health`)).ok) {
+            log(`${old.name} serves again after the restart: not taking over`);
+            return true;
+        }
+    }
+    log(`${old.name} did not serve again within ${cfg.restartWait}s of the restart: taking over`);
+    return false;
 }
 
 async function primaryDown(first) {
@@ -245,6 +283,7 @@ async function primaryDown(first) {
         log(`NOT taking over: ${e.why}`);
         return;
     }
+    if (await restartPrimary(old)) return;
     await promote(false);
 }
 
