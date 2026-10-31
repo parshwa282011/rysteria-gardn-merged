@@ -46,6 +46,18 @@ public hostname). `edge` serves the rrolf client at `/` and gardn under `/gardn/
 on one hostname; with cloudflared enabled, `run.sh` generates the tunnel ingress
 from the same file.
 
+## A machine without emscripten (the Raspberry Pi)
+
+`build.sh --skip-clients` builds the servers but not the WASM clients (rrolf client, gardn), so that machine keeps
+whatever client and gardn it had, and serves them the day it takes over the tunnel. After building on a machine
+that has emscripten (the Mac), copy them from your own computer:
+
+```sh
+scripts/sync-clients.sh c1 pi ~/.ssh/id_c1     # names from secrets/nodes.conf
+```
+then restart gardn there (`stop.sh`, `run.sh`). The files are WebAssembly, so they run on any machine. Check
+gardn end to end with a page + websocket test of `/gardn/` (the first packet is the version hash as a varint).
+
 ## The tunnel
 
 `run.sh` starts cloudflared over TCP (`--protocol http2`): QUIC (UDP) timed out every few minutes on a network
