@@ -18,6 +18,8 @@ load_servers
 [ -d "$RS_TARGET" ] || die "nothing built yet: run scripts/$RS_OS/build.sh"
 check_secrets_ready
 run mkdir -p "$RS_RUN"
+# stop.sh leaves this while it stops everything, so that nothing is restarted
+run rm -f "$RS_RUN/stopping"
 
 start() { # <name> <command...> ; runs inside the server's folder
     local name="$1"
@@ -81,8 +83,13 @@ for kind in master rrolf gardn edge sync; do
         edge) start "$name" node edge.js ;;
         sync)
             sync_enabled || continue
-            # a role left over from before a reboot or crash must not start the tunnel
-            is_running "$name" || run rm -f "$ROLE_FILE"
+            # a role left over from before a reboot or crash must not start the
+            # tunnel, except after stop.sh --keep-role (a restart of the primary)
+            if [ -e "$RS_RUN/sync.keep-role" ]; then
+                run rm -f "$RS_RUN/sync.keep-role"
+            else
+                is_running "$name" || run rm -f "$ROLE_FILE"
+            fi
             start "$name" node syncd.js
             ;;
         esac
@@ -102,12 +109,18 @@ elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     need cloudflared
     domain="$(common_get DOMAIN)"
     tunnel_name="$(common_get TUNNEL_NAME)"
+    # the id, when known, is what cloudflared is least likely to get wrong
+    tunnel_ref="$(common_get TUNNEL_ID)"
+    [ -n "$tunnel_ref" ] || tunnel_ref="$tunnel_name"
     tunnel_yml="$RS_RUN/tunnel.yml"
+    tunnel_creds="$(tunnel_credentials || true)"
     log "cloudflared tunnel $tunnel_name for $domain"
-    if [ "$RS_DRY_RUN" != 1 ]; then
+    if [ -z "$tunnel_creds" ] && [ "$RS_DRY_RUN" != 1 ]; then
+        warn "no credentials file for the tunnel: TUNNEL_CREDENTIALS=$(common_get TUNNEL_CREDENTIALS) does not exist here, nor does ~/.cloudflared/$tunnel_name.json. Copy it from the machine that made the tunnel (cloudflared tunnel create). The game runs, but not through the tunnel"
+    elif [ "$RS_DRY_RUN" != 1 ]; then
         {
-            echo "tunnel: $tunnel_name"
-            echo "credentials-file: $(common_get TUNNEL_CREDENTIALS)"
+            echo "tunnel: $tunnel_ref"
+            echo "credentials-file: $tunnel_creds"
             echo "ingress:"
             for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
                 [ "${SV_HOST[$i]}" = "-" ] && continue
@@ -129,13 +142,42 @@ elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     if is_running cloudflared; then
         log "cloudflared already running"
     elif [ "$RS_DRY_RUN" = 1 ]; then
-        echo "[dry-run] nohup cloudflared tunnel --protocol http2 --config $tunnel_yml run $tunnel_name"
-    else
-        (
-            cd "$RS_RUN" || exit 1
-            nohup cloudflared tunnel --protocol http2 --config "$tunnel_yml" run "$tunnel_name" >>"$RS_RUN/cloudflared.log" 2>&1 &
-            echo $! >"$(pid_file cloudflared)"
-        )
+        echo "[dry-run] nohup cloudflared tunnel --no-autoupdate --protocol http2 --config $tunnel_yml run $tunnel_ref"
+    elif [ -n "$tunnel_creds" ]; then
+        # TCP (http2) instead of QUIC: a network that drops UDP made the QUIC
+        # connections time out every few minutes. Started up to three times, and
+        # it has to register a connection with Cloudflare to count as started
+        tunnel_up=0
+        for attempt in 1 2 3; do
+            seen=0
+            [ ! -f "$RS_RUN/cloudflared.log" ] || seen=$(wc -l <"$RS_RUN/cloudflared.log")
+            (
+                cd "$RS_RUN" || exit 1
+                nohup cloudflared tunnel --no-autoupdate --protocol http2 --config "$tunnel_yml" run "$tunnel_ref" >>"$RS_RUN/cloudflared.log" 2>&1 &
+                echo $! >"$(pid_file cloudflared)"
+            )
+            for _ in $(seq 1 30); do
+                sleep 1
+                is_running cloudflared || break
+                if tail -n +"$((seen + 1))" "$RS_RUN/cloudflared.log" 2>/dev/null | grep -q "Registered tunnel connection"; then
+                    tunnel_up=1
+                    break
+                fi
+            done
+            [ "$tunnel_up" = 1 ] && break
+            warn "cloudflared did not connect (try $attempt of 3), last lines of $RS_RUN/cloudflared.log:"
+            tail -n 5 "$RS_RUN/cloudflared.log" >&2 || true
+            if is_running cloudflared; then
+                kill "$(cat "$(pid_file cloudflared)")" 2>/dev/null || true
+            fi
+            rm -f "$(pid_file cloudflared)"
+            sleep 2
+        done
+        if [ "$tunnel_up" = 1 ]; then
+            log "cloudflared is connected"
+        else
+            warn "cloudflared could not connect: the game runs here but not through the tunnel. syncd (or run.sh again) tries again"
+        fi
     fi
 fi
 

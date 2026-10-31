@@ -242,8 +242,14 @@ CLOUDFLARED_ENABLED=0
 # its webmail through the tunnel. scripts/<os>/mail.sh setup turns this on.
 MAIL_ENABLED=0
 TUNNEL_NAME=rysteria
-# the credentials json that "cloudflared tunnel create" wrote
-TUNNEL_CREDENTIALS=$HOME/.cloudflared/rysteria.json
+# the tunnel's id (cloudflared tunnel list), used instead of the name when set
+TUNNEL_ID=
+# the credentials json that "cloudflared tunnel create" wrote. ~ and \$HOME work,
+# so one file can serve machines with different home folders; if it is not
+# there, ~/.cloudflared/<TUNNEL_NAME>.json and <TUNNEL_ID>.json are tried
+TUNNEL_CREDENTIALS=~/.cloudflared/rysteria.json
+# 0 = the master does not start a game server again when it drops (default 1)
+RESTART_DROPPED_SERVERS=1
 # how game servers and gardn reach the master from the same machine
 MASTER_HOST=127.0.0.1
 MASTER_PORT=55554
@@ -360,6 +366,28 @@ check_secrets_ready() {
 }
 
 common_get() { env_get "$RS_SECRETS_DIR/common.env" "$1"; }
+
+# The tunnel's credentials file. common.env is the same on every machine but the
+# home folder is not (/Users/x on a Mac, /home/y on a Pi), so ~ and $HOME work in
+# TUNNEL_CREDENTIALS, and when the file is not where it says, the places
+# cloudflared puts it are tried: <TUNNEL_NAME>.json and <TUNNEL_ID>.json in
+# ~/.cloudflared. Prints the path, or nothing.
+tunnel_credentials() {
+    local path name id candidate
+    path="$(common_get TUNNEL_CREDENTIALS)"
+    path="${path/#\~/$HOME}"
+    path="${path//\$HOME/$HOME}"
+    name="$(common_get TUNNEL_NAME)"
+    id="$(common_get TUNNEL_ID)"
+    for candidate in "$path" "$HOME/.cloudflared/$name.json" "$HOME/.cloudflared/$id.json"; do
+        case "$candidate" in '' | */.json) continue ;; esac
+        if [ -f "$candidate" ]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
 sync_get() { env_get "$RS_SECRETS_DIR/sync.env" "$1"; }
 sync_enabled() { [ "$(sync_get SYNC_ENABLED)" = 1 ]; }
 
@@ -393,6 +421,14 @@ compose_env() {
             cat "$RS_SECRETS_DIR/master.env" >"$env_file"
             # the master names itself in /health and serves /backup to the backups
             env_set "$env_file" NODE_NAME "$(sync_node_name)"
+            # a game server that drops its connection without saying it is
+            # stopping is started again, once (restart-one.sh). Off with
+            # RESTART_DROPPED_SERVERS=0 in common.env
+            if [ "$(common_get RESTART_DROPPED_SERVERS)" = 0 ]; then
+                env_set "$env_file" RESTART_COMMAND ""
+            else
+                env_set "$env_file" RESTART_COMMAND "\"$RS_COMMON_DIR/restart-one.sh\" {name}"
+            fi
             if sync_enabled; then
                 env_set "$env_file" CLONE_SECRET "$(sync_get CLONE_SECRET)"
                 # the other machines check this one's /health over the LAN
@@ -424,6 +460,8 @@ compose_env() {
                 echo "RR_API_HOST=$(common_get MASTER_HOST)"
                 echo "RR_API_PORT=$(common_get MASTER_PORT)"
                 echo "RR_API_TLS=$(common_get MASTER_TLS)"
+                # the master knows the server by this name (chat, restarts)
+                echo "RR_SERVER_NAME=$name"
                 cat "$RS_SECRETS_DIR/$name.env"
             } >"$env_file"
             ;;

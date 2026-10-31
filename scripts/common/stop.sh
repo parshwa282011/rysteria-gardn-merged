@@ -4,7 +4,9 @@
 # which makes the master and gardn write everything they hold before exiting;
 # anything still alive after 20 seconds is killed.
 #
-# Usage: scripts/<os>/stop.sh [--dry-run]
+# Usage: scripts/<os>/stop.sh [--dry-run] [--keep-role]
+#   --keep-role  a machine that is the primary stays the primary: the next run.sh
+#                starts the tunnel again. syncd uses it to restart a primary.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -38,9 +40,18 @@ stop_one() {
     rm -f "$file"
 }
 
+# the master starts a game server again when it drops without saying it stops
+# (restart-one.sh). While this runs it must not
+run mkdir -p "$RS_RUN"
+run touch "$RS_RUN/stopping"
+
 # syncd first: it must not see the servers go away and start them again
 stop_one syncd
-run rm -f "$RS_RUN/sync.role"
+if [ "${RS_ARGS[0]:-}" = --keep-role ] && [ "$(cat "$RS_RUN/sync.role" 2>/dev/null)" = primary ]; then
+    run touch "$RS_RUN/sync.keep-role"
+else
+    run rm -f "$RS_RUN/sync.role"
+fi
 stop_one cloudflared
 for ((i = ${#SV_NAME[@]} - 1; i >= 0; i--)); do
     stop_one "${SV_NAME[$i]}"

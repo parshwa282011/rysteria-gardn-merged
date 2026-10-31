@@ -12,6 +12,7 @@ setup.sh         install dependencies, git pull the merged repo + submodules,
 build.sh         build every server + both clients into builds/<os>-<arch>/<name>/
 run.sh           start master, game servers, gardn, edge; cloudflared if enabled
 stop.sh          stop them (players and saves are flushed first)
+restart-one.sh   start one game server again (the master runs it when a server drops, once)
 clean-builds.sh  delete builds/ (only that) so the next build starts clean
 up.sh            setup + build + run
 sync.sh          backup / failover between machines: init | status | promote
@@ -25,8 +26,10 @@ start from an empty machine.
 
 Outside the checkout and outside `builds/`, mode 700/600, never overwritten:
 
-* `common.env` – `CLOUDFLARED_ENABLED`, tunnel name + credentials, domain, the URLs
-  baked into the clients.
+* `common.env` – `CLOUDFLARED_ENABLED`, tunnel name, id + credentials, domain, the URLs
+  baked into the clients. `TUNNEL_CREDENTIALS` may use `~`, so the same file serves a Mac and a Pi; if it is
+  not there `~/.cloudflared/<TUNNEL_NAME>.json` and `<TUNNEL_ID>.json` are tried. The credentials file itself
+  is not a `.env`: copy it to `~/.cloudflared/` on every machine that may run the tunnel.
 * `master.env` – the single source of truth (database, secrets, Discord keys).
 * `<server>.env` – values for one server only (`rrolf-default.env`, `rrolf-hc.env`,
   `rrolf-garden.env`, `gardn.env`, `edge.env`).
@@ -42,6 +45,19 @@ Edit `common/servers.conf` to add or remove processes (name, kind, biome, port,
 public hostname). `edge` serves the rrolf client at `/` and gardn under `/gardn/`
 on one hostname; with cloudflared enabled, `run.sh` generates the tunnel ingress
 from the same file.
+
+## The tunnel
+
+`run.sh` starts cloudflared over TCP (`--protocol http2`): QUIC (UDP) timed out every few minutes on a network
+that drops UDP, taking the site down with it. It waits for the first "Registered tunnel connection" and tries up
+to three times; when it cannot connect it says so, with the last lines of `run/cloudflared.log`, and the game
+keeps running locally. A missing credentials file is named in the warning.
+
+## When a game server dies
+
+The master restarts a game server that drops its connection without saying it was stopping (a crash, `kill -9`)
+once; `stop.sh` and a plain `kill` (SIGTERM) are "on purpose" and are left alone. `RESTART_DROPPED_SERVERS=0` in
+`common.env` turns it off. See `rrolf/MasterServer/c/README.md`.
 
 ## Backup servers
 
