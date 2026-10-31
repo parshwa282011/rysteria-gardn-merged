@@ -78,7 +78,12 @@ const server = http.createServer((req, res) => {
     const p = pathOf(req.url);
     if (p === "/health") {
         res.writeHead(200, { "content-type": "application/json" }).end('{"ok":true}');
-    } else if (p === "/gardn" || p.startsWith("/gardn/")) {
+    } else if (p === "/gardn") {
+        // gardn's page links its files relatively (gardn-client.js): without the
+        // slash they would be requested from the site root and 404
+        const q = req.url.indexOf("?");
+        res.writeHead(302, { location: "/gardn/" + (q >= 0 ? req.url.slice(q) : "") }).end();
+    } else if (p.startsWith("/gardn/")) {
         proxyHttp(req, res);
     } else {
         serveStatic(req, res);
