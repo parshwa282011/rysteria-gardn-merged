@@ -141,6 +141,10 @@ load_servers() {
     local name kind arg port host
     while read -r name kind arg port host; do
         case "$name" in '' | '#'*) continue ;; esac
+        # a space inside the arg column shifts every column after it
+        if [ "$port" != "-" ] && ! [[ "$port" =~ ^[0-9]+$ ]]; then
+            die "servers.conf: the port of \"$name\" is \"$port\", not a number. Several cmake options go in one column separated by commas (-DPVP=1,-DPDEV=1), not spaces"
+        fi
         SV_NAME+=("$name")
         SV_KIND+=("$kind")
         SV_ARG+=("$arg")
