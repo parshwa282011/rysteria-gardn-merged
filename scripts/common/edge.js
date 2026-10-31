@@ -55,23 +55,44 @@ function pathOf(url) {
 }
 
 function serveStatic(req, res) {
-    let pathname = decodeURIComponent(pathOf(req.url));
+    let pathname;
+    try {
+        pathname = decodeURIComponent(pathOf(req.url));
+    } catch (e) {
+        // "/%zz" must not take the whole site down
+        res.writeHead(400, { "content-type": "text/plain" }).end("bad request\n");
+        return;
+    }
     if (pathname === "/") pathname = "/index.html";
     const file = path.join(CLIENT_DIR, path.normalize(pathname));
     if (!file.startsWith(CLIENT_DIR + path.sep)) {
         res.writeHead(403).end();
         return;
     }
-    fs.readFile(file, (err, data) => {
-        if (err) {
+    fs.stat(file, (statErr, stat) => {
+        if (statErr || !stat.isFile()) {
             res.writeHead(404, { "content-type": "text/plain" }).end("not found\n");
             return;
         }
-        // the client is built as "rrolf-client" (no extension) for the page's
-        // <script src="rrolf-client">
-        const type = TYPES[path.extname(file)] || (file.endsWith("rrolf-client") ? TYPES[".js"] : "application/octet-stream");
-        res.writeHead(200, { "content-type": type, "cache-control": file.endsWith(".html") ? "no-cache" : "public, max-age=3600" });
-        res.end(data);
+        // The client must always be the build the servers speak: the browser asks again every time
+        // and gets a 304 (no body) while the file is unchanged. A cache of an hour kept the previous
+        // client alive for an hour after an update, and it can not read the new server's packets.
+        const etag = `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`;
+        if (req.headers["if-none-match"] === etag) {
+            res.writeHead(304, { etag, "cache-control": "no-cache" }).end();
+            return;
+        }
+        fs.readFile(file, (err, data) => {
+            if (err) {
+                res.writeHead(404, { "content-type": "text/plain" }).end("not found\n");
+                return;
+            }
+            // the client is built as "rrolf-client" (no extension) for the page's
+            // <script src="rrolf-client">
+            const type = TYPES[path.extname(file)] || (file.endsWith("rrolf-client") ? TYPES[".js"] : "application/octet-stream");
+            res.writeHead(200, { "content-type": type, "cache-control": "no-cache", etag });
+            res.end(data);
+        });
     });
 }
 
@@ -136,4 +157,6 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => console.log(`edge listening on 127.0.0.1:${PORT}, client ${CLIENT_DIR}, gardn :${GARDN_PORT}`));
+// a bug in one request must not take the site down
+process.on("uncaughtException", (e) => console.error("edge: uncaught " + (e && e.stack || e)));
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => process.exit(0));
