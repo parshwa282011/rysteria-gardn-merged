@@ -266,7 +266,7 @@ for u in $URLS; do
 done
 if [ "$OFF" = 0 ]; then
     echo
-    rsh 0 "cd '${N_REPO[0]}' && scripts/${N_OS[0]}/sync.sh status 2>&1 | tail -8" || true
+    rsh 0 "bash -l -c \"cd '${N_REPO[0]}' && scripts/${N_OS[0]}/sync.sh status 2>&1 | tail -8\"" || true
 fi
 [ "$bad" = 0 ] || die "something above is not right"
 if [ "$OFF" = 1 ]; then
