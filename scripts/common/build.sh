@@ -3,17 +3,24 @@
 #   builds/<os>-<arch>/<server>/        one folder per server, each with its .env
 # Intermediate files go to builds/.work/ and disappear with clean-builds.sh.
 #
-# Usage: scripts/<os>/build.sh [--skip-clients] [--dry-run] [--force]
+# Usage: scripts/<os>/build.sh [--skip-clients] [--pdev] [--dry-run] [--force]
 #   --skip-clients   do not build the WASM clients / gardn (no emscripten needed)
+#   --pdev           FOR TESTING ONLY: builds every rrolf server and the rrolf client with
+#                    -DPDEV (the give-petals cheat behind a PIN). The build is marked with
+#                    builds/<os>-<arch>/PDEV-BUILD until the next build without --pdev, which
+#                    also clears PDEV from the cmake caches. quick-deploy.sh refuses to go on
+#                    while it is there. Never run a --pdev build on a machine players use
 # Source code is never modified.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 skip_clients=0
+pdev=0
 parse_common_flags "$@"
 for arg in ${RS_ARGS[@]+"${RS_ARGS[@]}"}; do
     case "$arg" in
     --skip-clients) skip_clients=1 ;;
+    --pdev) pdev=1 ;;
     *) die "unknown option $arg" ;;
     esac
 done
@@ -29,6 +36,16 @@ need cmake git
 
 log "building for $RS_OS-$RS_ARCH with $RS_JOBS jobs into $RS_TARGET"
 run mkdir -p "$RS_TARGET" "$RS_WORK" "$RS_RUN"
+# PDEV is a switch of the cmake caches: -DPDEV=1 sets it, -UPDEV clears what an
+# earlier build left there
+pdev_flag=(-UPDEV)
+if [ "$pdev" = 1 ]; then
+    pdev_flag=(-DPDEV=1)
+    log "PDEV BUILD: every rrolf server and the rrolf client get the give-petals cheat. For testing only"
+    run touch "$RS_TARGET/PDEV-BUILD"
+else
+    run rm -f "$RS_TARGET/PDEV-BUILD"
+fi
 
 # one version per build: gardn clients and servers of different builds refuse
 # each other, so a stale browser tab reloads instead of misbehaving
@@ -68,7 +85,7 @@ fi
 
 # ------------------------------------------------------------- rrolf servers
 # the mode (default / pvp / garden / ctf) is compiled in, so every rrolf server
-# is its own build. PDEV (the give-petals PIN of the old scripts) is never enabled: -UPDEV clears it from a cmake cache left by an older build.
+# is its own build. PDEV (the give-petals PIN) is only built with --pdev, and servers.conf may not ask for it; without --pdev -UPDEV clears it from a cmake cache an older build left.
 for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
     [ "${SV_KIND[$i]}" = rrolf ] || continue
     # several options in one column are separated by commas: -DPVP=1,-DCTF=1
@@ -78,7 +95,7 @@ for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
         *PDEV*) die "servers.conf: ${SV_NAME[$i]} asks for PDEV, the give-petals cheat build, which is never deployed" ;;
     esac
     log "${SV_NAME[$i]} (rrolf game server ${SV_ARG[$i]}, port ${SV_PORT[$i]})"
-    cmake_build "$RS_ROOT/rrolf/Server" "$RS_WORK/${SV_NAME[$i]}" -UPDEV -DDEBUG_BUILD=0 ${extra[@]+"${extra[@]}"}
+    cmake_build "$RS_ROOT/rrolf/Server" "$RS_WORK/${SV_NAME[$i]}" "${pdev_flag[@]}" -DDEBUG_BUILD=0 ${extra[@]+"${extra[@]}"}
 done
 
 # ------------------------------------------------------------------- clients
@@ -87,7 +104,7 @@ GARDN_WS_URL="$(common_get GARDN_WS_URL)"
 if [ "$skip_clients" = 0 ]; then
     log "rrolf client (WASM), master at $CLIENT_API_URL"
     cmake_build "$RS_ROOT/rrolf/Client" "$RS_WORK/rrolf-client" \
-        -UPDEV -DWASM_BUILD=1 -DDEBUG_BUILD=0 -DCMAKE_C_FLAGS=-DEMSCRIPTEN "-DRR_API_URL=$CLIENT_API_URL"
+        "${pdev_flag[@]}" -DWASM_BUILD=1 -DDEBUG_BUILD=0 -DCMAKE_C_FLAGS=-DEMSCRIPTEN "-DRR_API_URL=$CLIENT_API_URL"
 
     if has_kind gardn; then
         log "gardn server (WebAssembly on Node)"

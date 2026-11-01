@@ -208,7 +208,8 @@ say "5. no PDEV in any build"
 for ((i = 0; i < N; i++)); do
     act "$i" "look for PDEV in the cmake caches" <<'EOF'
 cd "$REPO"
-found="$(grep -l '^PDEV' builds/.work/*/*/CMakeCache.txt 2>/dev/null || true)"
+found="$(ls builds/*/PDEV-BUILD 2>/dev/null || true) $(grep -l '^PDEV' builds/.work/*/*/CMakeCache.txt 2>/dev/null || true)"
+found="${found# }"; found="${found% }"
 if [ -n "$found" ]; then echo "   PDEV is set in: $found"; exit 1; fi
 echo "   none"
 EOF
