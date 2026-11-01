@@ -70,6 +70,27 @@ gardn end to end with a page + websocket test of `/gardn/` (the first packet is 
 testing on your own machine. It marks the build with `builds/<os>-<arch>/PDEV-BUILD`; the next `build.sh` without
 `--pdev` removes the mark and clears PDEV, and `quick-deploy.sh` refuses to continue while it is there.
 
+### SSH through the tunnel (off until you turn it on)
+
+`SSH_HOST=ssh` in `common.env` adds the route `ssh.<domain>` -> `ssh://127.0.0.1:22` to the tunnel that `run.sh`
+generates, so the sshd of the machine that holds the tunnel (the primary, or the Mac in split mode) can be reached
+without port forwarding. It is off unless that line is there. To switch it on:
+
+1. DNS: the name has to point at this tunnel (it may point at an older one): `cloudflared tunnel route dns --overwrite-dns rysteria2 ssh.parshwa.blog`
+2. Cloudflare Zero Trust > Access > Applications > Add > Self-hosted, domain `ssh.parshwa.blog`, an Allow policy for your e-mail. **Do this first**: without it anybody with `cloudflared` can reach the sshd's login prompt.
+3. Add `SSH_HOST=ssh` to `secrets/common.env`, `scripts/push-secrets.sh user@host ~/.ssh/id_c1` for the machines, then restart the tunnel (`stop.sh`, `run.sh`: a few seconds without the game).
+4. On the computer you connect from: `brew install cloudflared`, and in `~/.ssh/config`:
+   ```
+   Host home-mac
+       HostName ssh.parshwa.blog
+       User tejashshah
+       ProxyCommand cloudflared access ssh --hostname %h
+   ```
+   then `ssh home-mac` (a browser opens once for the Access login).
+
+Remote Login must be on for the machine (System Settings > General > Sharing on macOS). Because the tunnel moves with
+failover, `ssh.parshwa.blog` leads to whichever machine has the tunnel.
+
 ### Split mode: the game on two machines
 
 Normally the Mac runs the whole game and the Pi is a backup that takes over if it dies. `./split-pi.sh` and

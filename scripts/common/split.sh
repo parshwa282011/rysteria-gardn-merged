@@ -274,7 +274,12 @@ tunnel-check)
     tmp="$(mktemp)"
     write_tunnel_config "$tmp" "$ref" "${creds:-/none}"
     if command -v cloudflared >/dev/null 2>&1; then
-        if cloudflared tunnel ingress validate --config "$tmp" >/dev/null 2>&1; then echo "   the routes this machine would give the tunnel are valid ($(grep -c hostname "$tmp") hostnames)"; else bad "the generated routes are not valid: $tmp"; fi
+        # (--config belongs to "tunnel", before "ingress": after it cloudflared only prints its help)
+        validated="$(cloudflared tunnel --config "$tmp" ingress validate 2>&1 || true)"
+        case "$validated" in
+        *OK*) echo "   the routes this machine would give the tunnel are valid ($(grep -c hostname "$tmp") hostnames)" ;;
+        *) bad "the generated routes are not valid: $(printf '%s' "$validated" | tail -2 | tr '\n' ' ')" ;;
+        esac
         echo "   who is connected to the tunnel now:"
         info="$(cloudflared tunnel info "$ref" 2>&1 | grep -E '^(CONNECTOR|[0-9a-f]{8}-)' | cut -c1-110 | head -8 || true)"
         if [ -n "$info" ]; then

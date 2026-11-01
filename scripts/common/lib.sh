@@ -403,7 +403,11 @@ check_secrets_ready() {
     esac
 }
 
-common_get() { env_get "$RS_SECRETS_DIR/common.env" "$1"; }
+common_get() { # <key> [default]
+    local v
+    v="$(env_get "$RS_SECRETS_DIR/common.env" "$1")"
+    printf '%s' "${v:-${2:-}}"
+}
 
 # The tunnel's credentials file. common.env is the same on every machine but the
 # home folder is not (/Users/x on a Mac, /home/y on a Pi), so ~ and $HOME work in
@@ -452,6 +456,12 @@ write_tunnel_config() { # <file> <tunnel id or name> <credentials file>
         if mail_enabled && [ -n "$(mail_get WEBMAIL_HOST)" ]; then
             echo "  - hostname: $(mail_get WEBMAIL_HOST).$domain"
             echo "    service: http://127.0.0.1:$(mail_get WEBMAIL_PORT)"
+        fi
+        # ssh through the tunnel: ssh.<domain> reaches this machine's sshd. Only for people who
+        # pass Cloudflare Access and have cloudflared (see scripts/README.md)
+        if [ -n "$(common_get SSH_HOST)" ]; then
+            echo "  - hostname: $(common_get SSH_HOST).$domain"
+            echo "    service: ssh://127.0.0.1:$(common_get SSH_PORT 22)"
         fi
         echo "  - service: http_status:404"
     } >"$out"
