@@ -1,5 +1,6 @@
 // Public web server for game.<domain>.
 //   /          the rrolf client (static files from CLIENT_DIR)
+//   /leaderboard  the leaderboard page (leaderboard.html next to the client)
 //   /gardn/*   gardn: its page, client files and websocket, forwarded to the
 //              gardn server with the /gardn prefix removed
 //   /health    liveness
@@ -64,6 +65,8 @@ function serveStatic(req, res) {
         return;
     }
     if (pathname === "/") pathname = "/index.html";
+    // the leaderboard page: game.<domain>/leaderboard
+    else if (pathname === "/leaderboard" || pathname === "/leaderboard/") pathname = "/leaderboard.html";
     const file = path.join(CLIENT_DIR, path.normalize(pathname));
     if (!file.startsWith(CLIENT_DIR + path.sep)) {
         res.writeHead(403).end();
