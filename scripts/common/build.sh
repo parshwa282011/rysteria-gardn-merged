@@ -68,7 +68,7 @@ fi
 
 # ------------------------------------------------------------- rrolf servers
 # the mode (default / pvp / garden / ctf) is compiled in, so every rrolf server
-# is its own build. PDEV (the give-petals PIN of the old scripts) is never enabled.
+# is its own build. PDEV (the give-petals PIN of the old scripts) is never enabled: -UPDEV clears it from a cmake cache left by an older build.
 for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
     [ "${SV_KIND[$i]}" = rrolf ] || continue
     # several options in one column are separated by commas: -DPVP=1,-DCTF=1
@@ -78,7 +78,7 @@ for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
         *PDEV*) die "servers.conf: ${SV_NAME[$i]} asks for PDEV, the give-petals cheat build, which is never deployed" ;;
     esac
     log "${SV_NAME[$i]} (rrolf game server ${SV_ARG[$i]}, port ${SV_PORT[$i]})"
-    cmake_build "$RS_ROOT/rrolf/Server" "$RS_WORK/${SV_NAME[$i]}" -DDEBUG_BUILD=0 ${extra[@]+"${extra[@]}"}
+    cmake_build "$RS_ROOT/rrolf/Server" "$RS_WORK/${SV_NAME[$i]}" -UPDEV -DDEBUG_BUILD=0 ${extra[@]+"${extra[@]}"}
 done
 
 # ------------------------------------------------------------------- clients
@@ -87,7 +87,7 @@ GARDN_WS_URL="$(common_get GARDN_WS_URL)"
 if [ "$skip_clients" = 0 ]; then
     log "rrolf client (WASM), master at $CLIENT_API_URL"
     cmake_build "$RS_ROOT/rrolf/Client" "$RS_WORK/rrolf-client" \
-        -DWASM_BUILD=1 -DDEBUG_BUILD=0 -DCMAKE_C_FLAGS=-DEMSCRIPTEN "-DRR_API_URL=$CLIENT_API_URL"
+        -UPDEV -DWASM_BUILD=1 -DDEBUG_BUILD=0 -DCMAKE_C_FLAGS=-DEMSCRIPTEN "-DRR_API_URL=$CLIENT_API_URL"
 
     if has_kind gardn; then
         log "gardn server (WebAssembly on Node)"
