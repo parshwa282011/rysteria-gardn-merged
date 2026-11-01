@@ -71,9 +71,12 @@ fi
 # is its own build. PDEV (the give-petals PIN of the old scripts) is never enabled.
 for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
     [ "${SV_KIND[$i]}" = rrolf ] || continue
-    # several options in one column are separated by commas: -DPVP=1,-DPDEV=1
+    # several options in one column are separated by commas: -DPVP=1,-DCTF=1
     extra=()
     [ "${SV_ARG[$i]}" = "-" ] || IFS=',' read -ra extra <<<"${SV_ARG[$i]}"
+    case "${SV_ARG[$i]}" in
+        *PDEV*) die "servers.conf: ${SV_NAME[$i]} asks for PDEV, the give-petals cheat build, which is never deployed" ;;
+    esac
     log "${SV_NAME[$i]} (rrolf game server ${SV_ARG[$i]}, port ${SV_PORT[$i]})"
     cmake_build "$RS_ROOT/rrolf/Server" "$RS_WORK/${SV_NAME[$i]}" -DDEBUG_BUILD=0 ${extra[@]+"${extra[@]}"}
 done
