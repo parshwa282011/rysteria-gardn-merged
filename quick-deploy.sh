@@ -17,8 +17,13 @@
 #      and starts them, one after another (the Pi)
 #   8. checks the public pages and that every machine runs the same commit
 #
-# Usage: ./quick-deploy.sh [--dry-run] [--allow-dirty] [--key FILE] [--no-push]
+# With --leave-off the main machine is stopped as well, nothing is started again (not
+# even the Pi) and the pages are not checked: the machines end up updated, built and
+# off, with the database still running.
+#
+# Usage: ./quick-deploy.sh [--dry-run] [--leave-off] [--allow-dirty] [--key FILE] [--no-push]
 #   --dry-run      only print what would be done, change nothing
+#   --leave-off    update and build everything, but leave every server stopped
 #   --allow-dirty  deploy the commits even though files here are modified
 #   --key FILE     ssh key for the machines (default ~/.ssh/id_c1 if it exists)
 #   --no-push      do not push, but stop if something is not pushed yet
@@ -32,11 +37,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRY=0
 ALLOW_DIRTY=0
 PUSH=1
+OFF=0
 KEY=""
 [ -f "$HOME/.ssh/id_c1" ] && KEY="$HOME/.ssh/id_c1"
 while [ $# -gt 0 ]; do
     case "$1" in
     --dry-run) DRY=1 ;;
+    --leave-off) OFF=1 ;;
     --allow-dirty) ALLOW_DIRTY=1 ;;
     --no-push) PUSH=0 ;;
     --key) shift; KEY="${1:?--key needs a file}" ;;
@@ -126,6 +133,11 @@ cd "$REPO" && scripts/$OSDIR/stop.sh 2>&1 | tail -3 || true
 EOF
 done
 [ "$N" -gt 1 ] || echo "   (only one machine)"
+if [ "$OFF" = 1 ]; then
+    act 0 "stop (--leave-off)" <<'EOF'
+cd "$REPO" && scripts/$OSDIR/stop.sh 2>&1 | tail -3 || true
+EOF
+fi
 
 # ---------------------------------------------------------------- 3. update
 say "3. updating the code on every machine"
@@ -203,25 +215,31 @@ EOF
 done
 
 # ---------------------------------------------------------------- 6. restart the main machine
-say "6. restarting ${N_NAME[0]}"
-act 0 "stop, then run" <<'EOF'
+if [ "$OFF" = 0 ]; then
+    say "6. restarting ${N_NAME[0]}"
+    act 0 "stop, then run" <<'EOF'
 cd "$REPO"
 scripts/$OSDIR/stop.sh 2>&1 | tail -3
 scripts/$OSDIR/run.sh 2>&1 | tail -4
 EOF
+else
+    say "6. ${N_NAME[0]} stays off (--leave-off)"
+fi
 
 # ---------------------------------------------------------------- 7. the others
 for ((i = 1; i < N; i++)); do
-    say "7. ${N_NAME[$i]}: web clients and gardn from ${N_NAME[0]}, then start"
+    say "7. ${N_NAME[$i]}: web clients and gardn from ${N_NAME[0]}$([ "$OFF" = 1 ] || echo ", then start")"
     if [ "$DRY" = 1 ]; then
         echo "   [dry run] scripts/sync-clients.sh ${N_NAME[0]} ${N_NAME[$i]}"
     else
         "$ROOT/scripts/sync-clients.sh" "${N_NAME[0]}" "${N_NAME[$i]}" ${KEY:+"$KEY"} 2>&1 | tail -3
     fi
-    act "$i" "run" <<'EOF'
+    if [ "$OFF" = 0 ]; then
+        act "$i" "run" <<'EOF'
 cd "$REPO"
 scripts/$OSDIR/run.sh 2>&1 | tail -4
 EOF
+    fi
 done
 
 # ---------------------------------------------------------------- 8. check
@@ -230,19 +248,26 @@ if [ "$DRY" = 1 ]; then
     echo "   [dry run] would check the pages, sync status and that every machine runs $WANT"
     exit 0
 fi
-sleep 15
+[ "$OFF" = 1 ] || sleep 15
 bad=0
 for ((i = 0; i < N; i++)); do
     have="$(rsh "$i" "cd '${N_REPO[$i]}' && git rev-parse HEAD" 2>/dev/null || echo ?)"
     if [ "$have" = "$WANT" ]; then echo "   ${N_NAME[$i]}: runs ${WANT:0:7}"; else echo "   ${N_NAME[$i]}: runs ${have:0:7}, not ${WANT:0:7}"; bad=1; fi
 done
-URLS="${DEPLOY_URLS:-https://game.parshwa.blog/ https://game.parshwa.blog/leaderboard https://api-game.parshwa.blog/leaderboard https://game.parshwa.blog/gardn/}"
+URLS="${DEPLOY_URLS:-https://game.parshwa.blog/ https://game.parshwa.blog/leaderboard https://game.parshwa.blog/stats https://api-game.parshwa.blog/leaderboard https://game.parshwa.blog/gardn/}"
+[ "$OFF" = 0 ] || URLS=""
 for u in $URLS; do
     code="$(curl -s -o /dev/null -m 15 -w '%{http_code}' "$u" || true)"
     echo "   $code $u"
     [ "$code" = 200 ] || bad=1
 done
-echo
-rsh 0 "cd '${N_REPO[0]}' && scripts/${N_OS[0]}/sync.sh status 2>&1 | tail -8" || true
+if [ "$OFF" = 0 ]; then
+    echo
+    rsh 0 "cd '${N_REPO[0]}' && scripts/${N_OS[0]}/sync.sh status 2>&1 | tail -8" || true
+fi
 [ "$bad" = 0 ] || die "something above is not right"
-say "done"
+if [ "$OFF" = 1 ]; then
+    say "done: updated and built, every server is off. Start them with scripts/<os>/run.sh (c1 first), or ./quick-deploy.sh"
+else
+    say "done"
+fi
