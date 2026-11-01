@@ -70,6 +70,33 @@ gardn end to end with a page + websocket test of `/gardn/` (the first packet is 
 testing on your own machine. It marks the build with `builds/<os>-<arch>/PDEV-BUILD`; the next `build.sh` without
 `--pdev` removes the mark and clears PDEV, and `quick-deploy.sh` refuses to continue while it is there.
 
+### Split mode: the game on two machines
+
+Normally the Mac runs the whole game and the Pi is a backup that takes over if it dies. `./split-pi.sh` and
+`./split-mac.sh` (from your computer, over ssh) divide the game instead:
+
+| machine | runs |
+|---|---|
+| Mac (line 1 of `nodes.conf`) | PostgreSQL, the master, gardn, the web edge, rrolf-garden, rrolf-ctf, and the **one** cloudflared tunnel for every hostname |
+| Pi (line 2) | rrolf-hc (hell creek) and rrolf-pvp, which talk to the master over the LAN, and `syncd` in **clone mode**, which keeps its PostgreSQL a copy of the master's database |
+
+The tunnel's routes do not change: `hc-game` and `pvp-game` still point at `127.0.0.1:1234` / `:1235` on the Mac, where
+`scripts/common/forward.js` passes every connection on to the Pi (plain TCP, so websockets just work). The Pi never
+runs cloudflared. If a game server of the Pi drops, the master on the Mac restarts it over ssh (`restart-one.sh`).
+
+```sh
+./split-pi.sh      # first: stops the Pi, writes ~/.rysteria-secrets/split.env, builds, starts (waits for the master)
+./split-mac.sh     # then: the same on the Mac, starts the master, then starts the Pi's servers
+./split-mac.sh --status    # what runs where, whether the Pi answers (also ./split-pi.sh --status)
+./split-pi.sh --off; ./split-mac.sh --off      # back to the full stack on both, failover as before
+./split-pi.sh --tunnel-check                   # read-only: cloudflared credentials, clock, network, who is connected
+```
+Both need the committed code on the machines (`./quick-deploy.sh` first) and, for the Mac, a passwordless ssh key
+to the Pi. `--dry-run` shows what would happen, `--no-apply` only writes `split.env`. While split mode is on there is
+**no automatic failover**: if the Mac dies the game is down, and the Pi only keeps the data. `quick-deploy.sh` works
+in both modes (in split mode it copies no web clients to the Pi). The Pi's database must already have the master's
+tables, which any earlier run of its master created.
+
 ### Deploying everything from your computer
 
 `./quick-deploy.sh` (at the top of the repository) does all of it in the right order: pushes what is committed,

@@ -53,6 +53,10 @@ else
     run rm -f "$RS_RUN/sync.role"
 fi
 stop_one cloudflared
+# split mode: the forwarders to the other machine
+for ((i = 0; i < ${#RM_NAME[@]}; i++)); do
+    stop_one "fwd-${RM_NAME[$i]}"
+done
 for ((i = ${#SV_NAME[@]} - 1; i >= 0; i--)); do
     stop_one "${SV_NAME[$i]}"
 done

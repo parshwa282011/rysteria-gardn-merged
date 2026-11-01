@@ -131,6 +131,32 @@ SV_KIND=()
 SV_ARG=()
 SV_PORT=()
 SV_HOST=()
+# split mode: the servers of the other machine (see split_get below)
+RM_NAME=()
+RM_PORT=()
+RM_HOST=()
+
+# ---------------------------------------------------------------- split mode
+# ~/.rysteria-secrets/split.env, written by scripts/common/split.sh and not by hand,
+# shares the game between two machines. Without that file none of this does anything.
+#   SPLIT_ROLE=mac|pi
+#   SPLIT_RUN=a,b,c        the names of servers.conf that this machine starts
+#   SPLIT_BUILD_ONLY=a     built here but not started
+#   SPLIT_REMOTE=a,b       served by the other machine: here they only get a forwarder
+#                          (forward.js) and their route in the tunnel
+#   SPLIT_REMOTE_ADDR / SPLIT_REMOTE_SSH / SPLIT_REMOTE_REPO / SPLIT_SSH_KEY
+#                          where the other machine is (to forward to, to restart servers on)
+#   SPLIT_MASTER_ADDR      where the master is, for the machine that does not run it
+split_get() { env_get "$RS_SECRETS_DIR/split.env" "$1"; }
+split_role() { split_get SPLIT_ROLE; }
+split_has() { case ",$(split_get "$1")," in *",$2,"*) return 0 ;; esac; return 1; }
+# the address the game servers use for the master
+master_addr() {
+    local a
+    a="$(split_get SPLIT_MASTER_ADDR)"
+    [ -n "$a" ] || a="$(common_get MASTER_HOST)"
+    printf '%s' "$a"
+}
 
 load_servers() {
     SV_NAME=()
@@ -138,12 +164,24 @@ load_servers() {
     SV_ARG=()
     SV_PORT=()
     SV_HOST=()
+    RM_NAME=()
+    RM_PORT=()
+    RM_HOST=()
     local name kind arg port host
     while read -r name kind arg port host; do
         case "$name" in '' | '#'*) continue ;; esac
         # a space inside the arg column shifts every column after it
         if [ "$port" != "-" ] && ! [[ "$port" =~ ^[0-9]+$ ]]; then
             die "servers.conf: the port of \"$name\" is \"$port\", not a number. Several cmake options go in one column separated by commas (-DPVP=1,-DCTF=1), not spaces"
+        fi
+        if [ -n "$(split_role)" ]; then
+            if split_has SPLIT_REMOTE "$name"; then
+                RM_NAME+=("$name")
+                RM_PORT+=("$port")
+                RM_HOST+=("$host")
+                continue
+            fi
+            split_has SPLIT_RUN "$name" || split_has SPLIT_BUILD_ONLY "$name" || continue
         fi
         SV_NAME+=("$name")
         SV_KIND+=("$kind")
@@ -388,6 +426,52 @@ tunnel_credentials() {
     done
     return 1
 }
+# The cloudflared config: the tunnel, its credentials and one route per hostname,
+# to the port of the server on this machine. In split mode the servers of the other
+# machine are listed too: their ports here belong to forwarders (forward.js), so the
+# routes of both machines are the same as without split mode.
+write_tunnel_config() { # <file> <tunnel id or name> <credentials file>
+    local out="$1" ref="$2" creds="$3" domain i h hosts all_hosts all_ports
+    domain="$(common_get DOMAIN)"
+    all_hosts=("${SV_HOST[@]}" ${RM_HOST[@]+"${RM_HOST[@]}"})
+    all_ports=("${SV_PORT[@]}" ${RM_PORT[@]+"${RM_PORT[@]}"})
+    {
+        echo "tunnel: $ref"
+        echo "credentials-file: $creds"
+        echo "ingress:"
+        for ((i = 0; i < ${#all_hosts[@]}; i++)); do
+            [ "${all_hosts[$i]}" = "-" ] && continue
+            # several hostnames may share one server: "hc-game,default-game"
+            IFS=',' read -ra hosts <<<"${all_hosts[$i]}"
+            for h in "${hosts[@]}"; do
+                echo "  - hostname: $h.$domain"
+                echo "    service: http://127.0.0.1:${all_ports[$i]}"
+            done
+        done
+        # webmail for the mail server (SMTP/IMAP cannot go through a tunnel)
+        if mail_enabled && [ -n "$(mail_get WEBMAIL_HOST)" ]; then
+            echo "  - hostname: $(mail_get WEBMAIL_HOST).$domain"
+            echo "    service: http://127.0.0.1:$(mail_get WEBMAIL_PORT)"
+        fi
+        echo "  - service: http_status:404"
+    } >"$out"
+}
+
+# A Raspberry Pi has no clock that keeps the time while it is off. Until the time
+# service has set it, the TLS connection of cloudflared to Cloudflare is refused
+# (certificates "not yet valid"), so the tunnel is started after it. Waits at most 45
+# seconds, and not at all where no time service is meant to set the clock.
+wait_for_clock() {
+    command -v timedatectl >/dev/null 2>&1 || return 0
+    [ "$(timedatectl show -p NTP --value 2>/dev/null)" = yes ] || return 0
+    local i
+    for i in $(seq 1 45); do
+        [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ] && return 0
+        [ "$i" != 1 ] || log "waiting for the clock to be set (cloudflared needs the right time)"
+        sleep 1
+    done
+    warn "the clock is still not synchronised: cloudflared may be refused until it is"
+}
 sync_get() { env_get "$RS_SECRETS_DIR/sync.env" "$1"; }
 sync_enabled() { [ "$(sync_get SYNC_ENABLED)" = 1 ]; }
 
@@ -434,6 +518,12 @@ compose_env() {
                 # the other machines check this one's /health over the LAN
                 [ "$(sync_get SYNC_LAN_HEALTH)" = 0 ] || env_set "$env_file" BIND_ADDRESS ""
             fi
+            # split mode: the other machine's game servers and its database copy
+            # reach this master over the LAN
+            if [ "$(split_role)" = mac ]; then
+                env_set "$env_file" BIND_ADDRESS ""
+                [ -z "$(sync_get CLONE_SECRET)" ] || env_set "$env_file" CLONE_SECRET "$(sync_get CLONE_SECRET)"
+            fi
             ;;
         sync)
             {
@@ -452,12 +542,17 @@ compose_env() {
                 [ -f "$nodes" ] || nodes="$RS_ROOT/dual-server-syncing/nodes.conf"
                 echo "SYNC_NODES_FILE=$nodes"
                 echo "SYNC_STATE_FILE=$RS_SECRETS_DIR/sync-state.json"
+                # split mode, the machine without the master: only copy its database
+                if [ "$(split_role)" = pi ]; then
+                    echo "SYNC_MODE=clone"
+                    echo "SYNC_PRIMARY_URL=http://$(master_addr):$(common_get MASTER_PORT)"
+                fi
             } >"$env_file"
             ;;
         rrolf)
             {
                 echo "SERVER_SECRET=$(env_get "$RS_SECRETS_DIR/master.env" SERVER_SECRET)"
-                echo "RR_API_HOST=$(common_get MASTER_HOST)"
+                echo "RR_API_HOST=$(master_addr)"
                 echo "RR_API_PORT=$(common_get MASTER_PORT)"
                 echo "RR_API_TLS=$(common_get MASTER_TLS)"
                 # the master knows the server by this name (chat, restarts)

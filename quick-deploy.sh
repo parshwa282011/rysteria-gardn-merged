@@ -230,7 +230,9 @@ fi
 # ---------------------------------------------------------------- 7. the others
 for ((i = 1; i < N; i++)); do
     say "7. ${N_NAME[$i]}: web clients and gardn from ${N_NAME[0]}$([ "$OFF" = 1 ] || echo ", then start")"
-    if [ "$DRY" = 1 ]; then
+    if [ "$DRY" = 0 ] && rsh "$i" 'test -f ~/.rysteria-secrets/split.env' 2>/dev/null; then
+        echo "   split mode on ${N_NAME[$i]}: it serves no web clients, nothing to copy"
+    elif [ "$DRY" = 1 ]; then
         echo "   [dry run] scripts/sync-clients.sh ${N_NAME[0]} ${N_NAME[$i]}"
     else
         "$ROOT/scripts/sync-clients.sh" "${N_NAME[0]}" "${N_NAME[$i]}" ${KEY:+"$KEY"} 2>&1 | tail -3

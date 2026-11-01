@@ -19,6 +19,20 @@ load_servers
 # stop.sh is running, or someone stopped everything on purpose
 [ ! -e "$RS_RUN/stopping" ] || die "everything is being stopped: not restarting $name"
 
+# split mode: a server of the other machine is started again there
+for ((i = 0; i < ${#RM_NAME[@]}; i++)); do
+    [ "${RM_NAME[$i]}" = "$name" ] || continue
+    remote_ssh="$(split_get SPLIT_REMOTE_SSH)"
+    remote_repo="$(split_get SPLIT_REMOTE_REPO)"
+    key="$(split_get SPLIT_SSH_KEY)"
+    key="${key/#\~/$HOME}"
+    [ -n "$remote_ssh" ] && [ -n "$remote_repo" ] || die "$name runs on the other machine but split.env has no SPLIT_REMOTE_SSH / SPLIT_REMOTE_REPO"
+    ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10)
+    [ -z "$key" ] || ssh_opts+=(-i "$key" -o IdentitiesOnly=yes)
+    log "$name runs on $remote_ssh: starting it again there"
+    exec ssh -n "${ssh_opts[@]}" "$remote_ssh" "bash -l -c 'cd \"$remote_repo\" && scripts/common/restart-one.sh \"$name\"'"
+done
+
 kind=""
 for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
     [ "${SV_NAME[$i]}" = "$name" ] && kind="${SV_KIND[$i]}"

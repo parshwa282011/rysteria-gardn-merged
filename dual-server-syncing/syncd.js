@@ -10,6 +10,10 @@ process.on('uncaughtException', (e) => {
 //   node syncd.js            run the supervisor (what run.sh does)
 //   node syncd.js status     show this machine's view of the cluster
 //   node syncd.js promote    make this machine the primary now (planned switch)
+//
+// SYNC_MODE=clone (split mode, see scripts/common/split.sh): this machine does not run the
+// master, so it can never serve. It only copies the database of the master at
+// SYNC_PRIMARY_URL every interval: no health checks, no tunnel, no takeover.
 const fs = require('fs');
 const path = require('path');
 const { log, sleep, loadEnv, health, describe, internetOk, sh, shq, pidAlive } = require('./util');
@@ -37,7 +41,9 @@ const cfg = {
     nodesFile: env.SYNC_NODES_FILE || path.join(__dirname, 'nodes.conf'),
     statePath: env.SYNC_STATE_FILE || path.join(__dirname, 'sync-state.json'),
 };
-const PUBLIC = env.SYNC_PUBLIC_URL || `https://${cfg.apiHost}.${cfg.domain}`;
+const CLONE_ONLY = env.SYNC_MODE === 'clone';
+const CLONE_URL = (env.SYNC_PRIMARY_URL || '').replace(/\/+$/, '');
+const PUBLIC = CLONE_ONLY ? CLONE_URL : env.SYNC_PUBLIC_URL || `https://${cfg.apiHost}.${cfg.domain}`;
 const LOCAL = `http://127.0.0.1:${cfg.port}`;
 const roleFile = path.join(cfg.rsRun, 'sync.role');
 const forceFile = path.join(path.dirname(cfg.statePath), 'sync-force');
@@ -380,8 +386,8 @@ async function primaryTick() {
 
 // --------------------------------------------------------------------- main
 async function status() {
-    const rows = [['public', `${PUBLIC}/health`]];
-    rows.push(['this node', `${LOCAL}/health`]);
+    const rows = [[CLONE_ONLY ? 'master' : 'public', `${PUBLIC}/health`]];
+    if (!CLONE_ONLY) rows.push(['this node', `${LOCAL}/health`]);
     for (const n of nodes) if (n !== me && n.lan) rows.push([n.name, `http://${n.lan}/health`]);
     console.log(`node ${me.name} (priority ${rank + 1} of ${nodes.length}), role ${fs.existsSync(roleFile) ? fs.readFileSync(roleFile, 'utf8').trim() : '(syncd not running)'}`);
     console.log(`last sync ${state.lastSync ? new Date(state.lastSync).toISOString() : 'never'} from ${state.primary || '?'}, cursor ${state.cursor || '-'}`);
@@ -391,10 +397,25 @@ async function status() {
     }
 }
 
+// clone mode: the database of the master over the LAN, nothing else
+async function cloneTick() {
+    const h = await health(`${CLONE_URL}/health`);
+    if (!h.ok) {
+        log(`the master at ${CLONE_URL} does not answer (${describe(h)}): trying again in ${cfg.interval} s`);
+        return;
+    }
+    try {
+        await pull(h);
+    } catch (e) {
+        log(`sync failed: ${e.message}`);
+    }
+}
+
 async function main() {
     const cmd = process.argv[2] || 'run';
     if (cmd === 'status') return status();
     if (cmd === 'promote') {
+        if (CLONE_ONLY) throw new Error('this machine only copies the database (split mode): it can not be promoted');
         fs.writeFileSync(forceFile, '');
         console.log('requested: the running syncd takes over within one check interval');
         return;
@@ -402,9 +423,23 @@ async function main() {
     if (cmd !== 'run') throw new Error(`unknown command ${cmd}`);
     if (cfg.secret.length < 16) throw new Error('CLONE_SECRET must be at least 16 characters (secrets/sync.env)');
     if (!cfg.pgUri || (env.DB_TYPE || 'postgres') !== 'postgres') throw new Error('syncd needs DB_TYPE=postgres and POSTGRES_URI');
-    if (env.CLOUDFLARED_ENABLED !== '1') throw new Error('failover needs CLOUDFLARED_ENABLED=1 in common.env: without the tunnel a takeover cannot serve anyone');
+    if (CLONE_ONLY && !/^https?:\/\/[^/]+/.test(CLONE_URL)) throw new Error('SYNC_MODE=clone needs SYNC_PRIMARY_URL (http://<master address>:<port>)');
+    if (!CLONE_ONLY && env.CLOUDFLARED_ENABLED !== '1') throw new Error('failover needs CLOUDFLARED_ENABLED=1 in common.env: without the tunnel a takeover cannot serve anyone');
     if (!cfg.rsRun || !cfg.rsOs) throw new Error('RS_RUN / RS_OS missing: syncd is started by run.sh');
 
+    if (CLONE_ONLY) {
+        log(`syncd up: node ${me.name}, clone mode: copying the database of ${CLONE_URL} every ${cfg.interval} s`);
+        setRole('standby');
+        for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => process.exit(0));
+        for (;;) {
+            try {
+                await cloneTick();
+            } catch (e) {
+                log(`error: ${e.stack || e}`);
+            }
+            await sleep(cfg.interval * 1000);
+        }
+    }
     log(`syncd up: node ${me.name}, priority ${rank + 1} of ${nodes.length}, public ${PUBLIC}`);
     // a tunnel that is already up means this machine is the one serving
     if (pidAlive(tunnelPid)) {

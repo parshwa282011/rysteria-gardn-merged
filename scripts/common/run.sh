@@ -66,13 +66,41 @@ ROLE_FILE="$RS_RUN/sync.role"
 # With SYNC_ENABLED=1 only the primary gets the tunnel. syncd decides who that is
 # and records it in $ROLE_FILE (it calls this script again after taking over).
 is_primary_here() {
+    # split mode: the machine with the master always has the tunnel, the other never
+    case "$(split_role)" in mac) return 0 ;; pi) return 1 ;; esac
     ! sync_enabled || [ "$(cat "$ROLE_FILE" 2>/dev/null)" = primary ]
+}
+
+# a server of the other machine: connections to its port here are passed on to it
+start_forwarder() { # <name> <port>
+    local fwd="fwd-$1" addr
+    addr="$(split_get SPLIT_REMOTE_ADDR)"
+    [ -n "$addr" ] || die "split.env has no SPLIT_REMOTE_ADDR"
+    need node
+    if is_running "$fwd"; then
+        log "$fwd already running"
+        return 0
+    fi
+    log "forwarding port $2 to $addr:$2 for $1"
+    if [ "$RS_DRY_RUN" = 1 ]; then
+        echo "[dry-run] nohup node $RS_COMMON_DIR/forward.js 127.0.0.1 $2 $addr $2 >> $RS_RUN/$fwd.log"
+        return 0
+    fi
+    (
+        cd "$RS_RUN" || exit 1
+        nohup node "$RS_COMMON_DIR/forward.js" 127.0.0.1 "$2" "$addr" "$2" >>"$RS_RUN/$fwd.log" 2>&1 &
+        echo $! >"$(pid_file "$fwd")"
+    )
+    sleep 0.5
+    is_running "$fwd" || die "$fwd exited right away, see $RS_RUN/$fwd.log"
 }
 
 for kind in master rrolf gardn edge sync; do
     for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
         [ "${SV_KIND[$i]}" = "$kind" ] || continue
         name="${SV_NAME[$i]}"
+        # built here, run by the other machine
+        ! split_has SPLIT_BUILD_ONLY "$name" || continue
         case "$kind" in
         master)
             start "$name" ./rysteria-master --env .env
@@ -96,6 +124,11 @@ for kind in master rrolf gardn edge sync; do
     done
 done
 
+# split mode: the servers of the other machine are reached through these
+for ((i = 0; i < ${#RM_NAME[@]}; i++)); do
+    start_forwarder "${RM_NAME[$i]}" "${RM_PORT[$i]}"
+done
+
 # ------------------------------------------------------------------ mail server
 # "email system/" (docker). A failure here must not take the game servers down.
 if mail_enabled && is_primary_here; then
@@ -103,7 +136,9 @@ if mail_enabled && is_primary_here; then
 fi
 
 # ----------------------------------------------------------------- cloudflared
-if [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ] && ! is_primary_here; then
+if [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ] && [ "$(split_role)" = pi ]; then
+    log "split mode: no tunnel on this machine, the other machine has it and passes the connections on"
+elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ] && ! is_primary_here; then
     log "backup mode: no tunnel on this machine (syncd starts it if the primary fails). state: scripts/$RS_OS/sync.sh status"
 elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     need cloudflared
@@ -118,26 +153,7 @@ elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     if [ -z "$tunnel_creds" ] && [ "$RS_DRY_RUN" != 1 ]; then
         warn "no credentials file for the tunnel: TUNNEL_CREDENTIALS=$(common_get TUNNEL_CREDENTIALS) does not exist here, nor does ~/.cloudflared/$tunnel_name.json. Copy it from the machine that made the tunnel (cloudflared tunnel create). The game runs, but not through the tunnel"
     elif [ "$RS_DRY_RUN" != 1 ]; then
-        {
-            echo "tunnel: $tunnel_ref"
-            echo "credentials-file: $tunnel_creds"
-            echo "ingress:"
-            for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
-                [ "${SV_HOST[$i]}" = "-" ] && continue
-                # several hostnames may share one server: "hc-game,default-game"
-                IFS=',' read -ra hosts <<<"${SV_HOST[$i]}"
-                for h in "${hosts[@]}"; do
-                    echo "  - hostname: $h.$domain"
-                    echo "    service: http://127.0.0.1:${SV_PORT[$i]}"
-                done
-            done
-            # webmail for the mail server (SMTP/IMAP cannot go through a tunnel)
-            if mail_enabled && [ -n "$(mail_get WEBMAIL_HOST)" ]; then
-                echo "  - hostname: $(mail_get WEBMAIL_HOST).$domain"
-                echo "    service: http://127.0.0.1:$(mail_get WEBMAIL_PORT)"
-            fi
-            echo "  - service: http_status:404"
-        } >"$tunnel_yml"
+        write_tunnel_config "$tunnel_yml" "$tunnel_ref" "$tunnel_creds"
     fi
     if is_running cloudflared; then
         log "cloudflared already running"
@@ -148,6 +164,7 @@ elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
         # connections time out every few minutes. Started up to three times, and
         # it has to register a connection with Cloudflare to count as started
         tunnel_up=0
+        wait_for_clock
         for attempt in 1 2 3; do
             seen=0
             [ ! -f "$RS_RUN/cloudflared.log" ] || seen=$(wc -l <"$RS_RUN/cloudflared.log")

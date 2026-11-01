@@ -101,6 +101,13 @@ yet, and only finished transactions are returned, so a slow write is never skipp
 kept 3 days; a backup that was off longer takes a snapshot. `GET /health` now also says which
 node answered (`"node"`) and whether it can serve backups (`"backup"`).
 
+## Clone mode (split mode)
+
+With `SYNC_MODE=clone` and `SYNC_PRIMARY_URL=http://<master>:<port>` in its `.env` (written by
+`scripts/common/split.sh` for the machine that does not run the master, see `scripts/README.md`), syncd only
+copies the database of that master every interval (`/backup` over the LAN): no health checks, no tunnel and never a
+takeover, because that machine has no master of its own to serve with.
+
 ## Things to know
 
 - A failover can lose up to ~35 s of writes (the 30 s interval plus the master's own 5 s save
