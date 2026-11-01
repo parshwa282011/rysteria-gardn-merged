@@ -42,6 +42,17 @@ has_kind() {
     return 1
 }
 
+# Puts a program in its folder without touching the file a running copy executes:
+# copied under another name, then renamed over it. Overwriting a running program
+# in place kills it on macOS, so a build can run while the servers do and only the
+# restart afterwards is a gap.
+install_binary() { # <file> <folder>
+    local src="$1" dest="$2" name
+    name="$(basename "$src")"
+    run cp "$src" "$dest/.$name.new"
+    run mv -f "$dest/.$name.new" "$dest/$name"
+}
+
 cmake_build() { # <source dir> <work dir> <cmake args...>
     local src="$1" work="$2"
     shift 2
@@ -95,10 +106,10 @@ for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
     run mkdir -p "$dest"
     case "$kind" in
     master)
-        run cp "$RS_WORK/master/rysteria-master" "$dest/"
+        install_binary "$RS_WORK/master/rysteria-master" "$dest"
         ;;
     rrolf)
-        run cp "$RS_WORK/$name/rrolf-server" "$dest/"
+        install_binary "$RS_WORK/$name/rrolf-server" "$dest"
         ;;
     gardn)
         if [ "$skip_clients" = 0 ]; then
