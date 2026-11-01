@@ -66,6 +66,13 @@ scripts/sync-clients.sh c1 pi ~/.ssh/id_c1     # names from secrets/nodes.conf
 then restart gardn there (`stop.sh`, `run.sh`). The files are WebAssembly, so they run on any machine. Check
 gardn end to end with a page + websocket test of `/gardn/` (the first packet is the version hash as a varint).
 
+### Deploying everything from your computer
+
+`./quick-deploy.sh` (at the top of the repository) does all of it in the right order: pushes what is committed,
+stops the Pi so it can not take over, updates and builds every machine, restarts c1, copies the clients to the Pi
+and starts it, and checks the pages. `--dry-run` only prints the steps. It stops before restarting anything if a
+build fails or has PDEV in it, and never deploys uncommitted files (`--allow-dirty` deploys the commits anyway).
+
 ## The tunnel
 
 `run.sh` starts cloudflared over TCP (`--protocol http2`): QUIC (UDP) timed out every few minutes on a network
