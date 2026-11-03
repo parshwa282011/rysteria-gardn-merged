@@ -66,9 +66,9 @@ scripts/sync-clients.sh c1 pi ~/.ssh/id_c1     # names from secrets/nodes.conf
 then restart gardn there (`stop.sh`, `run.sh`). The files are WebAssembly, so they run on any machine. Check
 gardn end to end with a page + websocket test of `/gardn/` (the first packet is the version hash as a varint).
 
-`build.sh --pdev` builds every rrolf server and the rrolf client with the give-petals cheat (PDEV, behind a PIN) for
-testing on your own machine. It marks the build with `builds/<os>-<arch>/PDEV-BUILD`; the next `build.sh` without
-`--pdev` removes the mark and clears PDEV, and `quick-deploy.sh` refuses to continue while it is there.
+`build.sh` never builds PDEV (the give-petals cheat, behind a PIN): every build passes `-UPDEV`. To test with it,
+build by hand with `cmake -DPDEV=1` in `rrolf/Server` and `rrolf/Client`. `quick-deploy.sh` still refuses to continue
+if a PDEV build or cache is found.
 
 ### SSH through the tunnel (off until you turn it on)
 
