@@ -256,6 +256,17 @@ play. Gardn is at **https://game.parshwa.blog/gardn/** and uses the same login
 
 Logs: `builds/<os>-<arch>/run/<name>.log`.
 
+## Pages, minigames, phone apps
+
+* `game.<domain>/leaderboard`, `/stats?uuid=...` (search other players), `/status` (your own page, shareable) are
+  Rysteria's; `/gardn/leaderboard` and `/gardn/stats` are gardn's. The master rate limits them (60 requests a minute per address).
+* `rrolf-minigames` (`mini-game.<domain>`) runs capture the flag, team deathmatch and hide and seek, see
+  `rrolf/tools/ctf/README.md`. Set `MINIGAMES_PIN` in `secrets/master.env`: a match started with that PIN counts for the
+  accounts' wins.
+* New env values in `secrets/master.env` (all optional, see `rrolf/MasterServer/c/.env.example`): `GOOGLE_*`, `APPLE_*`
+  for the sign in, `EMAIL_API_*` for the codes by email.
+* `phones/` has the Android and iOS apps that load the site (see its README).
+
 ## Everyday commands
 
 | I want to... | Command |
