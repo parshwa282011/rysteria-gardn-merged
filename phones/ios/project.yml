@@ -1,0 +1,37 @@
+# XcodeGen (https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`, then
+#   cd phones/ios && xcodegen && open Rysteria.xcodeproj
+# set your team under Signing & Capabilities, then run on a device or simulator.
+name: Rysteria
+options:
+  bundleIdPrefix: blog.parshwa
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    GAME_URL: "https://game.parshwa.blog/"
+    API_HOST: "api-game.parshwa.blog"
+targets:
+  Rysteria:
+    type: application
+    platform: iOS
+    sources: [Rysteria]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: blog.parshwa.rysteria
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    info:
+      path: Rysteria/Info.plist
+      properties:
+        CFBundleDisplayName: Rysteria
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        # read by the app (see WebScreen.swift)
+        GameURL: $(GAME_URL)
+        ApiHost: $(API_HOST)
+        # rysteria://oauth: where the sign in comes back to the app
+        CFBundleURLTypes:
+          - CFBundleURLName: blog.parshwa.rysteria
+            CFBundleURLSchemes: [rysteria]
