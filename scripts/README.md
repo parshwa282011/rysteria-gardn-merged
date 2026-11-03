@@ -17,7 +17,7 @@ clean-builds.sh  delete builds/ (only that) so the next build starts clean
 up.sh            setup + build + run
 sync.sh          backup / failover between machines: init | status | promote
                  (see ../dual-server-syncing/README.md)
-mail.sh          the mail server in "email system/": setup | start | stop | dns | status
+mail.sh          the mail server (the "email system/" folder was removed for now, it is in the git history before the commit "Remove the mail server folder"; the script stops with an error until it is back)
 ```
 Every script takes `--dry-run` (print, don't do). `bootstrap.sh` / `windows\bootstrap.ps1`
 start from an empty machine.
