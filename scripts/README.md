@@ -98,7 +98,7 @@ Normally the Mac runs the whole game and the Pi is a backup that takes over if i
 
 | machine | runs |
 |---|---|
-| Mac (line 1 of `nodes.conf`) | PostgreSQL, the master, gardn, the web edge, rrolf-garden, rrolf-ctf, and the **one** cloudflared tunnel for every hostname |
+| Mac (line 1 of `nodes.conf`) | PostgreSQL, the master, gardn, the web edge, rrolf-garden, rrolf-minigames, and the **one** cloudflared tunnel for every hostname |
 | Pi (line 2) | rrolf-hc (hell creek) and rrolf-pvp, which talk to the master over the LAN, and `syncd` in **clone mode**, which keeps its PostgreSQL a copy of the master's database |
 
 The tunnel's routes do not change: `hc-game` and `pvp-game` still point at `127.0.0.1:1234` / `:1235` on the Mac, where

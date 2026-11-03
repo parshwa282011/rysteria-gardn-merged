@@ -4,7 +4,7 @@
 # it over ssh.
 #
 #   the "mac" machine (the one with the master and the database, c1)
-#       master, PostgreSQL, gardn, the web edge, rrolf-garden and rrolf-ctf, and the
+#       master, PostgreSQL, gardn, the web edge, rrolf-garden and rrolf-minigames, and the
 #       cloudflared tunnel for ALL hostnames. The ports of the servers that run on the
 #       other machine (1234 and 1235) are forwarders (forward.js) to that machine, so the
 #       tunnel keeps the routes it has: nothing in its configuration changes.

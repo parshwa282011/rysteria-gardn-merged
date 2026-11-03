@@ -10,12 +10,12 @@ does and what you should see when it worked. Nothing here asks you to edit code.
       |
       |  https://game.parshwa.blog          rrolf client  +  gardn (/gardn/)
       |  https://api-game.parshwa.blog      master server (accounts, logins, saves)
-      |  wss://hc-game / pvp-game / ga-game / ctf-game .parshwa.blog   rrolf game servers
+      |  wss://hc-game / pvp-game / ga-game / mini-game .parshwa.blog   rrolf game servers
       v
  Cloudflare  ----(tunnel, no open ports)---->  your machine
                                                  |
    edge :8080      master :55554     rrolf-hc :1234   rrolf-pvp :1235
-   gardn :9001                       rrolf-garden :1236   rrolf-ctf :1237
+   gardn :9001                       rrolf-garden :1236   rrolf-minigames :1237
                                                  |
                               database (PostgreSQL or MongoDB)
 ```
@@ -23,7 +23,7 @@ does and what you should see when it worked. Nothing here asks you to edit code.
 | Name | What it is | Port |
 |---|---|---|
 | `master` | the C master server: accounts, login tokens, all saved data | 55554 |
-| `rrolf-hc` / `rrolf-pvp` / `rrolf-garden` / `rrolf-ctf` | the four rrolf game servers | 1234 / 1235 / 1236 / 1237 |
+| `rrolf-hc` / `rrolf-pvp` / `rrolf-garden` / `rrolf-minigames` | the four rrolf game servers | 1234 / 1235 / 1236 / 1237 |
 | `gardn` | the gardn game server | 9001 |
 | `edge` | small web server: rrolf client at `/`, gardn under `/gardn/` | 8080 |
 
@@ -111,7 +111,7 @@ Setup created a folder `~/.rysteria-secrets/` (only you can read it). It lives
   rrolf-hc.env      one small file per game server (usually nothing to edit)
   rrolf-pvp.env
   rrolf-garden.env
-  rrolf-ctf.env
+  rrolf-minigames.env
   gardn.env
   edge.env
 ```
@@ -214,7 +214,7 @@ working right now" in the game. That is expected for now.
    cloudflared tunnel route dns rysteria hc-game.parshwa.blog
    cloudflared tunnel route dns rysteria pvp-game.parshwa.blog
    cloudflared tunnel route dns rysteria ga-game.parshwa.blog
-   cloudflared tunnel route dns rysteria ctf-game.parshwa.blog
+   cloudflared tunnel route dns rysteria mini-game.parshwa.blog
    ```
    (If a hostname already exists in Cloudflare DNS, delete that old record first.)
 
@@ -232,7 +232,7 @@ into `builds/<os>-<arch>/`. One folder per server, each with its own `.env`:
 
 ```
 builds/macos-arm64/   (or debian-amd64, debian-arm64 ...)
-  master/  rrolf-hc/  rrolf-pvp/  rrolf-garden/  rrolf-ctf/  gardn/  edge/  rrolf-client/  run/
+  master/  rrolf-hc/  rrolf-pvp/  rrolf-garden/  rrolf-minigames/  gardn/  edge/  rrolf-client/  run/
 ```
 Expect 10-30 minutes the first time (the WebAssembly parts are slow). It stops
 with a clear message if the database address is still the placeholder.

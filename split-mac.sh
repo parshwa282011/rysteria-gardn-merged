@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Split mode, the main machine (c1, line 1 of secrets/nodes.conf): it keeps the master, the
-# PostgreSQL database, gardn, the web edge, rrolf-garden and rrolf-ctf and the whole
+# PostgreSQL database, gardn, the web edge, rrolf-garden and rrolf-minigames and the whole
 # cloudflared tunnel. Hell creek (rrolf-hc) and pvp (rrolf-pvp) move to the other machine
 # (the Pi): their ports here become forwarders to it, so the tunnel's routes do not change.
 # The other machine keeps a copy of the database (syncd in clone mode).
