@@ -1,7 +1,10 @@
 // Public web server for game.<domain>.
 //   /          the rrolf client (static files from CLIENT_DIR)
-//   /leaderboard  the leaderboard page (leaderboard.html next to the client)
-//   /stats        the gardn petal statistics (stats.html)
+//   /leaderboard         Rysteria leaderboards (leaderboard.html next to the client)
+//   /stats?uuid=...      a player's stats, with a search for others (stats.html)
+//   /status              the stats of the player who is logged in (stats.html)
+//   /gardn/leaderboard   gardn leaderboards (the same leaderboard.html)
+//   /gardn/stats         the gardn petal statistics (gardn-stats.html)
 //   /gardn/*   gardn: its page, client files and websocket, forwarded to the
 //              gardn server with the /gardn prefix removed
 //   /health    liveness
@@ -52,6 +55,15 @@ const TYPES = {
     ".txt": "text/plain; charset=utf-8",
 };
 
+// pages of ours, by path. The gardn ones sit under /gardn/ but are not gardn's
+const PAGES = {
+    "/leaderboard": "/leaderboard.html",
+    "/gardn/leaderboard": "/leaderboard.html",
+    "/stats": "/stats.html",
+    "/status": "/stats.html",
+    "/gardn/stats": "/gardn-stats.html",
+};
+
 function pathOf(url) {
     return url.split("?")[0].split("#")[0];
 }
@@ -66,10 +78,7 @@ function serveStatic(req, res) {
         return;
     }
     if (pathname === "/") pathname = "/index.html";
-    // the leaderboard page: game.<domain>/leaderboard
-    else if (pathname === "/leaderboard" || pathname === "/leaderboard/") pathname = "/leaderboard.html";
-    // the gardn petal statistics: game.<domain>/stats
-    else if (pathname === "/stats" || pathname === "/stats/") pathname = "/stats.html";
+    else if (PAGES[pathname.replace(/\/+$/, "")]) pathname = PAGES[pathname.replace(/\/+$/, "")];
     const file = path.join(CLIENT_DIR, path.normalize(pathname));
     if (!file.startsWith(CLIENT_DIR + path.sep)) {
         res.writeHead(403).end();
@@ -131,6 +140,8 @@ const server = http.createServer((req, res) => {
         // slash they would be requested from the site root and 404
         const q = req.url.indexOf("?");
         res.writeHead(302, { location: "/gardn/" + (q >= 0 ? req.url.slice(q) : "") }).end();
+    } else if (PAGES[p.replace(/\/+$/, "")]) {
+        serveStatic(req, res);
     } else if (p.startsWith("/gardn/")) {
         proxyHttp(req, res);
     } else {

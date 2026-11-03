@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Puts gardn's petal names and rarities into the stats page.
+"""Puts the petal names into the stats pages.
 
-The master only knows petal ids; rrolf/Client/public/stats.html shows names, so it
-carries a table of them. Run this after a petal is added or renamed in
-gardn/Shared/StaticData.cc, then commit rrolf:
+The master only knows petal ids; the pages show names, so they carry a table of them:
+  gardn-stats.html  gardn's petals and rarities (gardn/Shared/StaticData.cc)
+  stats.html        Rysteria's petal names (rrolf/Shared/StaticData.c), for the loadout
+Run this after a petal is added or renamed, then commit rrolf:
 
-    scripts/gen-petal-table.py            # rewrites the table in stats.html
-    scripts/gen-petal-table.py --check    # only checks that it is up to date
+    scripts/gen-petal-table.py            # rewrites the tables
+    scripts/gen-petal-table.py --check    # only checks that they are up to date
 """
 import json
 import os
@@ -16,7 +17,10 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "gardn", "Shared", "StaticData.cc")
 DEFS = os.path.join(ROOT, "gardn", "Shared", "StaticDefinitions.hh")
-PAGE = os.path.join(ROOT, "rrolf", "Client", "public", "stats.html")
+PAGE = os.path.join(ROOT, "rrolf", "Client", "public", "gardn-stats.html")
+PROFILE = os.path.join(ROOT, "rrolf", "Client", "public", "stats.html")
+RR_DATA = os.path.join(ROOT, "rrolf", "Shared", "StaticData.c")
+RR_BEGIN, RR_END = "/*RRPETALS-BEGIN*/", "/*RRPETALS-END*/"
 BEGIN, END = "/*PETALS-BEGIN*/", "/*PETALS-END*/"
 
 defs = open(DEFS).read()
@@ -37,14 +41,30 @@ rows = ",\n".join("    [%s, %d]" % (json.dumps(n), rarities.index(r)) for n, r i
 table = "%s\nconst RARITIES = %s;\nconst PETALS = [   // [name, rarity], the index is the petal id\n%s\n];\n%s" % (
     BEGIN, json.dumps(rarities), rows, END)
 
-page = open(PAGE).read()
-head, rest = page.split(BEGIN, 1)
-_, tail = rest.split(END, 1)
-new = head + table + tail
+def rewrite(path, begin, end, table):
+    page = open(path).read()
+    head, rest = page.split(begin, 1)
+    _, tail = rest.split(end, 1)
+    return page, head + table + tail
+
+# Rysteria's names, by petal id
+rr = open(RR_DATA).read()
+start = rr.index("RR_PETAL_NAMES[rr_petal_id_max] = {")
+rr_names = re.findall(r'"([^"]*)"', rr[start:rr.index("};", start)])
+rr_table = "%s\nconst RR_PETALS = %s;   // the index is the petal id\n%s" % (RR_BEGIN, json.dumps(rr_names), RR_END)
+
+ok = True
+for path, begin, end, table, label in ((PAGE, BEGIN, END, table, "gardn-stats.html"),
+                                       (PROFILE, RR_BEGIN, RR_END, rr_table, "stats.html")):
+    old, new = rewrite(path, begin, end, table)
+    if "--check" in sys.argv:
+        if new != old:
+            print("%s is out of date: run scripts/gen-petal-table.py" % label)
+            ok = False
+    else:
+        open(path, "w").write(new)
+        print("table written to %s" % path)
 if "--check" in sys.argv:
-    if new != page:
-        sys.exit("stats.html is out of date: run scripts/gen-petal-table.py")
-    print("stats.html is up to date (%d petals)" % len(names))
-else:
-    open(PAGE, "w").write(new)
-    print("%d petals written to %s" % (len(names), PAGE))
+    if not ok:
+        sys.exit(1)
+    print("petal tables are up to date (%d gardn, %d rysteria petals)" % (len(names), len(rr_names)))
