@@ -38,6 +38,31 @@ if [ -z "$sim" ]; then
 fi
 log "simulator: $sim"
 run xcrun simctl boot "$sim" || true
-run open -a Simulator
+# the window of the Simulator: `open -a Simulator` only works when macOS knows the app, and it is not always
+# in the same place (or installed at all: an Xcode without it still runs simulators, just without a window)
+open_simulator_window() {
+    local dev app
+    dev="$(xcode-select -p 2>/dev/null || true)"
+    for app in "$dev/Applications/Simulator.app" /Applications/Xcode.app/Contents/Developer/Applications/Simulator.app \
+        /Applications/Xcode-beta.app/Contents/Developer/Applications/Simulator.app; do
+        if [ -d "$app" ]; then run open "$app"; return 0; fi
+    done
+    if [ "$PH_DRY_RUN" != 1 ] && open -b com.apple.iphonesimulator 2>/dev/null; then return 0; fi
+    return 1
+}
+have_window=1
+open_simulator_window || have_window=0
 run xcrun simctl install "$sim" "$app"
 run xcrun simctl launch "$sim" "$APP_ID"
+
+if [ "$have_window" = 0 ] && [ "$PH_DRY_RUN" != 1 ]; then
+    warn "Simulator.app was not found on this Mac, so there is no window: the app runs in the simulator anyway."
+    sleep 4
+    shot="$PH_OUT/ios-simulator.png"
+    xcrun simctl io "$sim" screenshot "$shot" >/dev/null 2>&1 && log "what it shows right now: $shot"
+    cat <<'NOWINDOW'
+To see it live you need the Simulator window: Xcode > Open Developer Tool > Simulator. If that menu entry is missing,
+Xcode's installation is incomplete: re-download Xcode (the App Store, or developer.apple.com/download), or on a beta
+check Xcode > Settings > Components. A real iPhone works without it: scripts-phones/ios-run.sh --device <id>
+NOWINDOW
+fi
