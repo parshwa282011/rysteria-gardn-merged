@@ -8,12 +8,20 @@ servers or their machines (c1, the Pi).
 |---|---|
 | `doctor.sh` | Checks the laptop for everything below and says what to install. Changes nothing. |
 | `make-icons.sh` | Makes both apps' icons from one 1024x1024 PNG. |
+| `make-keystore.sh` | Makes the Android signing key once (`phones.env` says where). |
 | `android-build.sh` | Debug APK → `builds/phones/rysteria-debug.apk`. `--lint` also runs the Android checks. |
 | `android-run.sh` | Installs it on a phone / emulator and starts it. `--avd NAME` starts an emulator, `--logcat` shows the log. |
 | `android-deploy.sh` | **Signed** release bundle (`.aab`, for Google Play) and APK. Uploads nothing. |
 | `ios-build.sh` | Builds for the simulator (no Apple account needed) or `device`. |
 | `ios-run.sh` | Starts it in the simulator, or `--device <id>` on a plugged-in iPhone. |
-| `ios-deploy.sh` | Archives and makes the App Store `.ipa`. `--upload` sends it to App Store Connect (asks first). |
+| `ios-deploy.sh` | Archives and makes the App Store `.ipa`. **`--testflight`** sends it to App Store Connect for TestFlight testing, **`--production`** sends the build you will submit to review (after checks, and a typed "production"). |
+
+**TestFlight or production?** There is one upload; the choice is made in the store's console. Every uploaded iOS build shows
+up in TestFlight; "production" means you pick a build on the app's version page and press *Add for Review*
+([`APPLE_PRODUCTION.md`](../APPLE_PRODUCTION.md)). `--testflight` just uploads and tells you how to install it;
+`--production` runs the checks first (site pages up, icon, API key, new build number), asks you to type
+`production`, uploads, and prints what is left to do. On Google Play the same split is the *track*: you upload the
+`.aab` to **Internal testing** first and later promote that release to **Production** (see below).
 
 Every script takes `--dry-run` (prints what it would do, does nothing). Settings live in `phones.env`
 (git-ignored; copy of `phones.env.example`). Lines that still need you say `#TODO: ADD THE INFO`.
@@ -71,14 +79,12 @@ The key that signs your app. **Keep the file outside the repository and back it 
 stick): lose it and you can not update the app without Google's key reset.
 
 ```sh
-mkdir -p ~/.rysteria-phones
-"$(/usr/libexec/java_home -v 21 2>/dev/null || echo /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home)"/bin/keytool \
-  -genkeypair -v -keystore ~/.rysteria-phones/rysteria-upload.jks -alias rysteria \
-  -keyalg RSA -keysize 2048 -validity 10000
+scripts-phones/make-keystore.sh
 ```
 
-It asks for a password (twice) and some name fields (anything). `phones.env` already points at that path and alias.
-The passwords are asked for each time `android-deploy.sh` runs; they are never written anywhere.
+It asks for a password (twice), makes `~/.rysteria-phones/rysteria-upload.jks` (the path and alias in `phones.env`)
+and shows the key's fingerprint. The password is asked for each time `android-deploy.sh` runs; it is never written
+anywhere.
 
 ### Publish on Google Play
 
@@ -91,9 +97,12 @@ The passwords are asked for each time `android-deploy.sh` runs; they are never w
    feature graphic 1024x500, at least 2 phone screenshots.
 4. `scripts-phones/android-deploy.sh` → `builds/phones/rysteria-<version>-<code>.aab`. Raise `VERSION_CODE` in
    `phones.env` before every upload (the console refuses a code it has seen).
-5. Upload the `.aab` under *Testing > Internal testing* first, add your own Google account as a tester, install
-   from the link on a phone, check the list above again.
-6. **Production**: a *personal* developer account created after November 2023 must first run a **closed test with
+5. **Internal testing** (the test track): *Testing > Internal testing > Create new release*, upload the `.aab`,
+   *Save > Next > Start rollout*. Add testers under the *Testers* tab (a list of Google accounts, up to 100), copy the
+   opt-in link, open it on the phone, install. No review, available within minutes. Check the list above again.
+6. **Production** (the real release): *Production > Create new release*; either upload the same `.aab` again or
+   **Add from library** to reuse the one you tested (same version code, which proves it is the build you tried).
+   A *personal* developer account created after November 2023 must first run a **closed test with
    at least 12 testers opted in for 14 days in a row**, then fill the production-access form. An *organization*
    account does not have this rule. Then *Production > Create release*, upload the same `.aab`.
 
@@ -117,7 +126,7 @@ iPhone (Settings > Privacy & Security), plug it in and trust the Mac, then
 `xcrun devicectl list devices` for its id and `scripts-phones/ios-run.sh --device <id>`. A free Apple ID works for
 a 7-day install; the paid program is needed for TestFlight and the store.
 
-### Apple accounts, ids, keys
+### Apple accounts, ids, keys (the whole Apple setup is in [`APPLE.md`](../APPLE.md), the review in [`APPLE_PRODUCTION.md`](../APPLE_PRODUCTION.md))
 
 1. **Apple Developer Program**: https://developer.apple.com/programs/enroll/ , 99 USD a year (company enrolment
    needs a D-U-N-S number, individual does not).
@@ -128,7 +137,7 @@ a 7-day install; the paid program is needed for TestFlight and the store.
    also the "primary App ID" that the web sign in below belongs to).
 4. **App record**: https://appstoreconnect.apple.com > *Apps > + > New App*: iOS, name, language, pick that bundle
    id, any SKU.
-5. **App Store Connect API key** (for `ios-deploy.sh --upload`): appstoreconnect.apple.com > *Users and Access >
+5. **App Store Connect API key** (for `ios-deploy.sh --testflight/--production`): appstoreconnect.apple.com > *Users and Access >
    Integrations > App Store Connect API > Team Keys > +*, access **App Manager**. Download the `AuthKey_XXXX.p8`
    (**only once**, keep it outside the repo), and copy the **Key ID** (`ASC_KEY_ID`) and the **Issuer ID** at the top of
    the page (`ASC_ISSUER_ID`). `ASC_KEY_PATH` is the file's path.
@@ -136,8 +145,8 @@ a 7-day install; the paid program is needed for TestFlight and the store.
 ### Publish on the App Store
 
 1. `scripts-phones/ios-deploy.sh` makes the archive and `builds/phones/ios-release/Rysteria.ipa` and uploads nothing.
-   `scripts-phones/ios-deploy.sh --upload` asks, then sends it to App Store Connect. Raise `VERSION_CODE` for each
-   upload.
+   `--testflight` sends it to App Store Connect for testing, `--production` sends the build you will submit to review.
+   Raise `VERSION_CODE` for each upload.
 2. After a few minutes to an hour the build shows under *TestFlight*. Add yourself under *Internal Testing*, install
    the **TestFlight** app on the iPhone, and test the list above.
 3. For the store: screenshots (6.9" iPhone size is enough to start), description, **privacy policy URL**, age rating,

@@ -271,7 +271,8 @@ Logs: `builds/<os>-<arch>/run/<name>.log`.
 * Logging in is the static page `rrolf/Client/public/login.html` (`/login`, `/signup`), not part of the game client.
 * `phones/` has the Android and iOS apps that load the site, `scripts-phones/` builds, runs and publishes them (by hand, on
   your laptop only). [`KEYS.md`](KEYS.md) says where to get every key, id and file (Discord, Google, Apple, Amazon SES) and [`APPLE.md`](APPLE.md)
-  walks through the whole Apple side (IDs, Sign in with Apple, TestFlight, App Store Connect, review).
+  walks through the whole Apple side (IDs, Sign in with Apple, email relay, TestFlight) and [`APPLE_PRODUCTION.md`](APPLE_PRODUCTION.md)
+  is the App Store submission and review.
 
 ## Everyday commands
 

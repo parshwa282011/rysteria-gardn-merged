@@ -54,17 +54,20 @@ https://developer.apple.com/account > *Certificates, Identifiers & Profiles*.
    → this is `APPLE_CLIENT_ID`. Open it, tick **Sign in with Apple > Configure**: Primary App ID = the one from step 2,
    **Domains** `api-game.parshwa.blog` (no `https://`), **Return URLs**
    `https://api-game.parshwa.blog/oauth/apple/callback`.
-4. **Domain verification**: in that same dialog click **Download** next to the domain. Save the file as
-   `secrets/apple-domain.txt` and set `APPLE_DOMAIN_FILE=~/.rysteria-secrets/apple-domain.txt`. Push the secrets and
-   restart the master: it now serves the file at `https://api-game.parshwa.blog/.well-known/apple-developer-domain-association.txt`.
-   Click **Verify** in Apple's dialog. (Apple's file is only valid a few days: download, push, verify in one go,
-   and again if it says it expired.) Save.
+4. **Domain verification**: only if that dialog shows a **Download** link for a verification file (newer dialogs do not,
+   then skip this step). If it does: save the file as `secrets/apple-domain.txt`, set
+   `APPLE_DOMAIN_FILE=~/.rysteria-secrets/apple-domain.txt`, push the secrets, restart the master (it serves the file at
+   `https://api-game.parshwa.blog/.well-known/apple-developer-domain-association.txt`) and press **Verify** the same day,
+   Apple's file expires after a few days.
 5. **Server-to-server notification endpoint** (in the same Services ID dialog, or under the primary App ID's
    *Sign in with Apple > Edit*): `https://api-game.parshwa.blog/oauth/apple/notify`. Apple posts a signed message there when a
    person revokes the app or deletes their Apple Account. The master accepts only messages that carry Apple's signature
    (checked against Apple's published keys), are addressed to this app and are recent; everything else gets a bare 401.
    Each genuine notice is mailed to `ADMIN_EMAIL`, even when the daily email limit is used up.
-6. **Key**: *Keys > +*, name Rysteria, tick **Sign in with Apple > Configure** → pick the primary App ID → Save →
+6. **Email sources** (so the codes reach people who chose "Hide My Email"): *Certificates, Identifiers & Profiles >
+   Services > Configure Sign in with Apple for Email Communication*: Domain `email.parshwa.blog`, address
+   `noreply@email.parshwa.blog`. Needs the SES DKIM records below. Details in [`APPLE.md`](APPLE.md), step 1d.
+7. **Key**: *Keys > +*, name Rysteria, tick **Sign in with Apple > Configure** → pick the primary App ID → Save →
    Continue → Register. **Download the `.p8` now (only once)** into `secrets/` (e.g. `secrets/apple.p8`);
    the **Key ID** on that page → `APPLE_KEY_ID`; `APPLE_PRIVATE_KEY_FILE=~/.rysteria-secrets/apple.p8`.
 

@@ -36,7 +36,7 @@ else
     else miss "Xcode              -> install from the App Store, open it once, accept the license, then: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"; fi
     command -v xcodegen >/dev/null 2>&1 && ok "xcodegen" || miss "xcodegen           -> brew install xcodegen"
     [ -n "${IOS_TEAM_ID:-}" ] && ok "IOS_TEAM_ID is set" || printf '  note     IOS_TEAM_ID is empty (needed to run on a real iPhone and for ios-deploy.sh)\n'
-    [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER_ID:-}" ] && [ -f "${ASC_KEY_PATH:-/none}" ] && ok "App Store Connect API key" || printf '  note     no App Store Connect API key (only needed for ios-deploy.sh --upload)\n'
+    [ -n "${ASC_KEY_ID:-}" ] && [ -n "${ASC_ISSUER_ID:-}" ] && [ -f "${ASC_KEY_PATH:-/none}" ] && ok "App Store Connect API key" || printf '  note     no App Store Connect API key (only needed for ios-deploy.sh --testflight/--production)\n'
 fi
 
 echo "Settings"

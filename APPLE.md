@@ -61,16 +61,12 @@ the Apple Account has two-factor authentication on (Apple requires it).
 | Email Sources for Apple's Private Email Relay Service | leave empty (we send no email to relay addresses) |
 | Server-to-Server Notification Endpoint | `https://api-game.parshwa.blog/oauth/apple/notify` |
 
-Next to the domain there is a **Download** link for a verification file. Do this *now*, in one go (Apple's file
-only lives a few days):
-
-1. Download the file (`apple-developer-domain-association.txt`).
-2. Save it as `secrets/apple-domain.txt` in this repository.
-3. In `secrets/master.env` set `APPLE_DOMAIN_FILE=~/.rysteria-secrets/apple-domain.txt`.
-4. `scripts/push-secrets.sh user@host` to every machine, restart the master. It now serves the file at
-   `https://api-game.parshwa.blog/.well-known/apple-developer-domain-association.txt` (open that address in a
-   browser: you must see the file's text).
-5. Back in Apple's dialog press **Verify**. Then *Next > Done > Continue > Save*.
+**Domain verification file.** Older versions of this dialog had a **Download** link next to the domain and asked you to
+host a file. If yours shows no such link (yours did not), there is nothing to do: skip it, leave `APPLE_DOMAIN_FILE`
+empty in `master.env`. Only if Apple ever shows the link: download the file, save it as `secrets/apple-domain.txt`,
+set `APPLE_DOMAIN_FILE=~/.rysteria-secrets/apple-domain.txt`, push the secrets, restart the master (it serves the
+file at `https://api-game.parshwa.blog/.well-known/apple-developer-domain-association.txt`), press **Verify**.
+Then *Next > Done > Continue > Save*.
 
 The notification endpoint field exists in the same dialog (and under the primary App ID's *Sign in with Apple >
 Edit*). Apple may send a test notification when you save: the master answers 401 to anything that is not
@@ -88,6 +84,31 @@ signed by Apple, which is right.
 *Continue > Register > Download.* **You can download the `.p8` only once**: save it as `secrets/apple.p8`
 (git-ignored), back it up somewhere private. The page shows the **Key ID** (10 characters): that is `APPLE_KEY_ID`.
 
+### 1d. "Configure Sign in with Apple for Email Communication" (yes, do it)
+
+Where: *Certificates, Identifiers & Profiles* > the **Services** / **More** section in the left menu >
+**Configure Sign in with Apple for Email Communication** (the page that says "register email sources").
+
+Why: a person who signs in with Apple can choose **Hide My Email**. Apple then gives us an address like
+`abc123@privaterelay.appleid.com` that forwards to them, **but only for senders you registered**; mail from anyone
+else is dropped. Rysteria mails that address when it is the only one a person has (the confirmation of an
+email, the code for a password reset or an account deletion go to an address the provider vouches for).
+Without the registration those codes would silently never arrive for Hide-My-Email users.
+
+What to enter (Apple wants a domain or an address that passes SPF or DKIM):
+
+| Field | Put |
+|---|---|
+| Domains | `email.parshwa.blog` (the domain in `EMAIL_FROM`) |
+| Email Addresses | `noreply@email.parshwa.blog` (the exact `EMAIL_FROM`) |
+
+Entering the domain is enough; adding the address too does no harm. Apple then checks the domain's DNS: Amazon SES with
+*Easy DKIM* (step 2 of the SES part in [`KEYS.md`](KEYS.md): the three CNAME records) satisfies **DKIM**. To satisfy
+**SPF** as well, set a custom MAIL FROM domain in SES: *Identities > email.parshwa.blog > Authentication > Custom
+MAIL FROM domain* `mail.email.parshwa.blog`, then add the **MX** and **TXT** (SPF) records it shows in Cloudflare DNS.
+Wait until SES says *Verified*, then press **Save** on Apple's page. Test: sign in with Apple on the website choosing
+*Hide My Email*, then ask for a password reset for that account and type the relay address: the mail must arrive.
+
 Finally fill `secrets/master.env`:
 
 ```
@@ -95,7 +116,6 @@ APPLE_CLIENT_ID=blog.parshwa.rysteria.web
 APPLE_TEAM_ID=DTAYB9YB9Y
 APPLE_KEY_ID=<the key id from 1c>
 APPLE_PRIVATE_KEY_FILE=~/.rysteria-secrets/apple.p8
-APPLE_DOMAIN_FILE=~/.rysteria-secrets/apple-domain.txt
 ```
 
 then push the secrets and restart. When all of `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` and
@@ -146,7 +166,7 @@ in; `/account` opens from the Account screen; a link in the game to another site
 | SKU | anything only you see, e.g. `rysteria-ios` |
 | User Access | Full Access |
 
-### 5b. App Store Connect API key (for `ios-deploy.sh --upload`)
+### 5b. App Store Connect API key (for `ios-deploy.sh --testflight` / `--production`)
 
 *Users and Access > Integrations > App Store Connect API > Team Keys > +* Name `Rysteria deploy`, access
 **App Manager**. Download the `AuthKey_XXXXXXXX.p8` (also once only), keep it outside the repository, and copy the
@@ -156,7 +176,7 @@ in; `/account` opens from the Account screen; a link in the game to another site
 ### 5c. Upload a build
 
 ```sh
-scripts-phones/ios-deploy.sh --upload     # archives, signs, asks "Send ...?" and uploads
+scripts-phones/ios-deploy.sh --testflight     # archives, signs, asks "Send ...?" and uploads for TestFlight
 ```
 
 Raise `VERSION_CODE` in `phones.env` every time (Apple refuses a build number it has seen). After 5 to 60 minutes
@@ -168,79 +188,14 @@ the build shows under *TestFlight > iOS Builds*.
 Store Connect team). Install **TestFlight** from the App Store on the iPhone, accept the invite, install Rysteria.
 There is no review for internal testers. (External testers, anyone with a link, need a short Beta App Review.)
 
-### 5e. The store page: *App Store > the version "1.0 Prepare for Submission"*
+### 5e. From here on: the store page and the review
 
-| Field | Put |
-|---|---|
-| Screenshots | iPhone **6.9"** is required (the 6.5" ones are optional; Apple scales them). Take them in the Simulator (an iPhone 16/17 Pro Max) with *Cmd+S*, landscape, 1320 x 2868 or 2868 x 1320. 3 to 10 of them. The app is iPhone-only, so no iPad screenshots |
-| Promotional text | one sentence (optional) |
-| Description | what the game is, that it is free with accounts, that chat and leaderboards are online |
-| Keywords | `petals,flower,io,multiplayer,survival,mmo,arena` (100 characters total, comma separated, no spaces) |
-| Support URL | `https://game.parshwa.blog/` (a page that shows how to reach you; the privacy policy page has your email: `https://game.parshwa.blog/privacy` is fine too) |
-| Marketing URL | optional |
-| Version | `1.0` |
-| Copyright | `2026 Tejashkumar Shah` |
-| Build | pick the one you uploaded (*+ Add Build*). It asks about export compliance only if the plist key is missing; `ITSAppUsesNonExemptEncryption` is already `false` in the project, answer *No* if it asks |
+Everything for the App Store page (screenshots, texts, age rating, privacy answers, the demo account and review notes) and
+the submission itself is in **[`APPLE_PRODUCTION.md`](APPLE_PRODUCTION.md)**. TestFlight needs none of it.
 
-### 5f. *App Information* (left menu)
-
-| Field | Put |
-|---|---|
-| Category | Primary **Games**, subcategory Action (or Adventure) |
-| Content Rights | *Does your app contain, show, or access third-party content?* **No** |
-| Age Rating | press *Edit* and answer the questionnaire honestly: **Unrestricted web access: No** (the app only opens the game; other links go to Safari); **User-generated content / chat: Yes**; violence in a game: cartoon, mild; no gambling, no real-money purchases, no mature content. Expect 12+ or 13+ |
-| Privacy Policy URL | `https://game.parshwa.blog/privacy` |
-
-### 5g. *App Privacy* (the "nutrition label")
-
-*Get Started*, "Do you or your third-party partners collect data from this app?" **Yes**, then add:
-
-| Data type | Linked to the user | Used for | Tracking |
-|---|---|---|---|
-| Contact Info > Email Address | Yes | App Functionality (codes, account) | No |
-| Contact Info > Name (the display name a provider gives) | Yes | App Functionality | No |
-| User Content > Other User Content (chat messages) | Yes | App Functionality | No |
-| Identifiers > User ID (account id) | Yes | App Functionality | No |
-| Usage Data > Gameplay Content (progress, scores) | Yes | App Functionality | No |
-
-Everything *not used for tracking* (no ads, no analytics, no data sold: "Do you use data for tracking? No").
-
-### 5h. *Pricing and Availability*: Free, all countries (or leave the EU out if you do not want to deal with the EU rules).
-
-### 5i. *App Review Information* (this decides whether you pass)
-
-| Field | Put |
-|---|---|
-| Contact | your name, phone, email |
-| **Sign-in required** | tick it, and give a **demo account**: make it on the website, **confirm its email** (otherwise the reviewer is stopped at the confirmation step) and write its username and password here |
-| Notes | see below |
-
-Notes to paste:
-
-> Rysteria is a free multiplayer game (the game itself runs on game.parshwa.blog; the app is its iOS front end).
-> Log in with the demo account above, or tap "Sign up". Sign in with Apple, Google and Discord are on the login page.
-> Account deletion: in the game open the Account screen, tap "Manage account" (or go to /account), "Delete my
-> account": it asks for the password and a code that is emailed to the account. In-game chat is filtered and
-> needs level 3; player reports go to the email in the privacy policy.
-
-## 6. The things Apple reviewers actually bounce, and where you stand
-
-| Guideline | What it asks | Status |
-|---|---|---|
-| **4.8 Login services** | Offer Sign in with Apple if you offer Google/Discord | Done (button appears once step 1 is configured) |
-| **5.1.1(v) Account deletion** | Start deleting the account inside the app | Done: the Account screen opens `/account` with password + emailed code + typed username. Apple's token is revoked on deletion |
-| **5.1.1 Privacy policy** | A link in the store page and in the app | Store page: `/privacy`. The login page links to it too |
-| **4.2 Minimum functionality** | An app that is only a website is often refused | **The real risk.** It is a live multiplayer game with accounts, and the notes above say so, but be ready for a "your app is a web view" reply. If it happens, answer that the game needs live servers and that the app adds system sign-in, and ask for a call. Adding something native (a "no connection" screen, haptics, a splash) helps |
-| **1.2 User-generated content** | Filter, a way to report and block, published contact | Chat is filtered. I did **not** find a report or block button in the game: Apple may ask. Say reports go by email, or ask me to add a report button |
-| **2.1 App completeness** | It must not crash, links must work | Test it on a real iPhone with TestFlight first |
-| **2.3 / 5.2** | Screenshots show the real game, no other apps' names | Use real screenshots |
-
-When everything is filled in: *Add for Review > Submit to App Review*. First reviews take a day or two. Choose
-*Manually release this version* if you want to press the button yourself.
-
-## 7. After it is live
+## 6. After it is live
 
 * New game versions need **no** new app: the app loads the site.
-* A new app version is only for changes in `phones/ios`: bump `VERSION_NAME` / `VERSION_CODE`, `ios-deploy.sh --upload`,
-  select the build in a new version page, submit.
+* A new app version is only for changes in `phones/ios`: bump `VERSION_NAME` / `VERSION_CODE`,
+  `scripts-phones/ios-deploy.sh --production`, select the build in a new version page, submit.
 * Apple's notices (someone deleted their Apple Account) arrive at `ADMIN_EMAIL`.
