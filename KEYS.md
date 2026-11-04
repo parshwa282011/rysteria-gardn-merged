@@ -59,7 +59,12 @@ https://developer.apple.com/account > *Certificates, Identifiers & Profiles*.
    restart the master: it now serves the file at `https://api-game.parshwa.blog/.well-known/apple-developer-domain-association.txt`.
    Click **Verify** in Apple's dialog. (Apple's file is only valid a few days: download, push, verify in one go,
    and again if it says it expired.) Save.
-5. **Key**: *Keys > +*, name Rysteria, tick **Sign in with Apple > Configure** → pick the primary App ID → Save →
+5. **Server-to-server notification endpoint** (in the same Services ID dialog, or under the primary App ID's
+   *Sign in with Apple > Edit*): `https://api-game.parshwa.blog/oauth/apple/notify`. Apple posts a signed message there when a
+   person revokes the app or deletes their Apple Account. The master accepts only messages that carry Apple's signature
+   (checked against Apple's published keys), are addressed to this app and are recent; everything else gets a bare 401.
+   Each genuine notice is mailed to `ADMIN_EMAIL`, even when the daily email limit is used up.
+6. **Key**: *Keys > +*, name Rysteria, tick **Sign in with Apple > Configure** → pick the primary App ID → Save →
    Continue → Register. **Download the `.p8` now (only once)** into `secrets/` (e.g. `secrets/apple.p8`);
    the **Key ID** on that page → `APPLE_KEY_ID`; `APPLE_PRIVATE_KEY_FILE=~/.rysteria-secrets/apple.p8`.
 

@@ -2,6 +2,7 @@
 //   /          the rrolf client (static files from CLIENT_DIR)
 //   /login, /signup      log in, sign up, confirm the email, reset (login.html); both games send
 //                        everybody without a valid login here
+//   /account             link Discord/Google/Apple, add an email, delete the account (account.html)
 //   /privacy, /terms     privacy policy and terms of service (Google/Apple/store listings ask for URLs)
 //   /leaderboard         Rysteria leaderboards (leaderboard.html next to the client)
 //   /stats?uuid=...      a player's stats, with a search for others (stats.html)
@@ -65,6 +66,7 @@ const PAGES = {
     "/privacy-policy": "/privacy.html",
     "/terms": "/terms.html",
     "/terms-of-service": "/terms.html",
+    "/account": "/account.html",
     "/login": "/login.html",
     "/signup": "/login.html",
     "/leaderboard": "/leaderboard.html",
