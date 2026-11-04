@@ -27,8 +27,13 @@ Never paste these into chat, an issue or a commit. If one leaks, make a new one 
 ## Google (sign in with Google)
 
 1. https://console.cloud.google.com > create a project (e.g. Rysteria).
-2. **APIs & Services > OAuth consent screen** (Google Auth Platform > Branding): app name, support email, your
-   domain `parshwa.blog` as an authorized domain, a developer contact. Audience **External**. Scopes are only the basic
+2. **APIs & Services > OAuth consent screen** (Google Auth Platform > Branding): app name `Rysteria`, support email,
+   **App logo** `https://game.parshwa.blog/logo-120.png` (download it and upload the file, 120x120), **Application
+   home page** `https://game.parshwa.blog/`, **Privacy policy** `https://game.parshwa.blog/privacy`, **Terms of
+   service** `https://game.parshwa.blog/terms` (both pages are served by the website, see `rrolf/Client/public/`),
+   **Authorized domains** `parshwa.blog`, a developer contact. Google asks you to **verify the domain** once in
+   Search Console (https://search.google.com/search-console, add `parshwa.blog` as a domain property and put the TXT
+   record it shows in Cloudflare DNS). Audience **External**. Scopes are only the basic
    ones (`openid`, `email`, `profile`). Then **Publish app** (otherwise only listed test users can sign in, and
    the login expires after 7 days).
 3. **Credentials > Create credentials > OAuth client ID**, type **Web application**. Under **Authorized redirect URIs**
