@@ -14,6 +14,8 @@ settings:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    # iPhone only: App Store Connect then asks for iPhone screenshots only (it still runs on an iPad)
+    TARGETED_DEVICE_FAMILY: "1"
     GAME_URL: "https://game.parshwa.blog/"
     API_HOST: "api-game.parshwa.blog"
 targets:
@@ -30,6 +32,8 @@ targets:
       properties:
         CFBundleDisplayName: Rysteria
         UIRequiresFullScreen: true
+        # the app only talks HTTPS (standard encryption): no export compliance question at every upload
+        ITSAppUsesNonExemptEncryption: false
         UIStatusBarHidden: true
         UIViewControllerBasedStatusBarAppearance: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
