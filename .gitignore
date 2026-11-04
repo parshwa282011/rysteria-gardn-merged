@@ -3,3 +3,19 @@ secrets/
 dual-server-syncing/node_modules/
 dual-server-syncing/nodes.conf
 backup/
+
+# phone apps: generated, signing material and settings
+scripts-phones/phones.env
+phones/android/.gradle/
+phones/android/build/
+phones/android/app/build/
+phones/android/gradle/
+phones/android/gradlew
+phones/android/gradlew.bat
+phones/android/local.properties
+phones/ios/Rysteria.xcodeproj/
+phones/ios/Rysteria/Info.plist
+phones/ios/build/
+*.jks
+*.keystore
+*.p8

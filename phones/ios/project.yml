@@ -1,6 +1,8 @@
 # XcodeGen (https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`, then
 #   cd phones/ios && xcodegen && open Rysteria.xcodeproj
 # set your team under Signing & Capabilities, then run on a device or simulator.
+# scripts-phones/ does all of this (and overrides GAME_URL, API_HOST, the bundle id, the version and the
+# team on the xcodebuild command line, so this file stays as it is).
 name: Rysteria
 options:
   bundleIdPrefix: blog.parshwa
@@ -9,6 +11,9 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     GAME_URL: "https://game.parshwa.blog/"
     API_HOST: "api-game.parshwa.blog"
 targets:

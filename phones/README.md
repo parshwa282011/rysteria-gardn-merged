@@ -5,11 +5,12 @@ speak (nothing to update in the store when the game changes).
 
 | | |
 |---|---|
-| `android/` | Kotlin, WebView + Custom Tabs. Open the folder in Android Studio, or `gradle assembleDebug`. |
-| `ios/` | SwiftUI, WKWebView + ASWebAuthenticationSession. `brew install xcodegen`, `cd ios && xcodegen`, open `Rysteria.xcodeproj`, pick your team, run. |
+| `android/` | Kotlin, WebView + Custom Tabs. Targets Android 16 (API 36), which Google Play requires since 31 August 2026. |
+| `ios/` | SwiftUI, WKWebView + ASWebAuthenticationSession. The Xcode project is made from `project.yml` by XcodeGen. |
 
-Neither has been built in this repository's environment (no Android SDK or Xcode on the machine that wrote
-them): expect to fix a version number or two on the first build.
+**Build, run on a phone / emulator / simulator and publish with the scripts in [`../scripts-phones/`](../scripts-phones/README.md)**
+(your laptop, by hand only). Neither app has been built in this repository's environment: expect to fix a version
+number or two on the first build.
 
 ## Where they point
 
@@ -40,10 +41,10 @@ back to the app yet; do that on the website.
   `https://api-game.../oauth/google/callback` (the same for the website and the apps, the master does the rest).
 * Apple: a Services ID with the return URL `https://api-game.../oauth/apple/callback`, plus a key (`.p8`).
   Apple's guideline 4.8 asks for Sign in with Apple in an app that offers other social logins: it is there.
-* `MasterServer/c/.env.example` lists the variables (`GOOGLE_*`, `APPLE_*`).
+* `MasterServer/c/.env.example` lists the variables (`GOOGLE_*`, `APPLE_*`); [`../KEYS.md`](../KEYS.md) says where to get each.
 
 ## Store notes
 
 * iOS: Apple also asks for a reason to exist beyond "a website in a box" (guideline 4.2); a game with its own
   accounts and live servers normally passes, but expect questions.
-* Android: add icons under `res/mipmap-*` and set `android:icon` in the manifest.
+* Both stores need an icon: `scripts-phones/make-icons.sh` makes them from one 1024x1024 PNG.

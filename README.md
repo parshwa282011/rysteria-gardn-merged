@@ -269,7 +269,8 @@ Logs: `builds/<os>-<arch>/run/<name>.log`.
   for the sign in, `EMAIL_PROVIDER=ses` + `AWS_*` for the codes by email. Lines marked `#TODO: ADD THE INFO` are the
   ones still empty. An Apple key (`*.p8`) goes in `secrets/` and is sent with the `.env` files.
 * Logging in is the static page `rrolf/Client/public/login.html` (`/login`, `/signup`), not part of the game client.
-* `phones/` has the Android and iOS apps that load the site (see its README).
+* `phones/` has the Android and iOS apps that load the site, `scripts-phones/` builds, runs and publishes them (by hand, on
+  your laptop only). [`KEYS.md`](KEYS.md) says where to get every key, id and file (Discord, Google, Apple, Amazon SES).
 
 ## Everyday commands
 
