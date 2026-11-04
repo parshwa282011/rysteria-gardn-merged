@@ -8,7 +8,18 @@ struct RysteriaApp: App {
                 .ignoresSafeArea()
                 .background(Color.black)
                 .statusBarHidden(true)
-                .persistentSystemOverlays(.hidden)
+                .hideSystemOverlays()
+        }
+    }
+}
+
+extension View {
+    /// hides the home indicator and other system overlays; the call exists from iOS 16, the app still runs on 15
+    @ViewBuilder func hideSystemOverlays() -> some View {
+        if #available(iOS 16.0, *) {
+            self.persistentSystemOverlays(.hidden)
+        } else {
+            self
         }
     }
 }
