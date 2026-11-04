@@ -1,5 +1,7 @@
 // Public web server for game.<domain>.
 //   /          the rrolf client (static files from CLIENT_DIR)
+//   /login, /signup      log in, sign up, confirm the email, reset (login.html); both games send
+//                        everybody without a valid login here
 //   /leaderboard         Rysteria leaderboards (leaderboard.html next to the client)
 //   /stats?uuid=...      a player's stats, with a search for others (stats.html)
 //   /status              the stats of the player who is logged in (stats.html)
@@ -57,6 +59,8 @@ const TYPES = {
 
 // pages of ours, by path. The gardn ones sit under /gardn/ but are not gardn's
 const PAGES = {
+    "/login": "/login.html",
+    "/signup": "/login.html",
     "/leaderboard": "/leaderboard.html",
     "/gardn/leaderboard": "/leaderboard.html",
     "/stats": "/stats.html",

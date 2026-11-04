@@ -246,7 +246,7 @@ secrets_import() {
         mkdir -p "$RS_SECRETS_DIR"
         chmod 700 "$RS_SECRETS_DIR"
     fi
-    for f in "$src"/*.env "$src"/nodes.conf; do
+    for f in "$src"/*.env "$src"/*.p8 "$src"/nodes.conf; do
         [ -f "$f" ] || continue
         log "importing $(basename "$f") from $src"
         if [ "$RS_DRY_RUN" = 1 ]; then

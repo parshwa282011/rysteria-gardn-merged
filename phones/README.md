@@ -25,10 +25,12 @@ Google refuses to sign in inside a web view, and Apple and Discord work better o
 2. The master remembers `app` with the sign in. When the provider is done it sends the browser to
    `rysteria://oauth#oauth_code=...` instead of the website (`MasterServer/c/oauth.c`).
 3. The app owns the `rysteria` scheme (Android: the intent filter in `AndroidManifest.xml`; iOS: `CFBundleURLTypes`),
-   catches it, and loads `https://game.parshwa.blog/#oauth_code=...` in its web view. The page exchanges the code
-   like on the website, so the login is saved in the web view's own storage.
+   catches it, and loads `https://game.parshwa.blog/#oauth_code=...` in its web view. The game forwards that to
+   the log in page (`/login#oauth_code=...`), which exchanges the code like on the website, so the login is
+   saved in the web view's own storage and the page returns to the game.
 
-Password login, signup and the codes by email or Discord work in the web view as they are.
+Password login, signup, confirming the email and the codes by email or Discord are the web page `/login`, which
+works in the web view as it is.
 Linking another provider to an account (Account screen) opens the provider in the browser too but is not wired
 back to the app yet; do that on the website.
 

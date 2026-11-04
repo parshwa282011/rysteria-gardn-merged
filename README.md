@@ -189,8 +189,9 @@ The same master code runs on either; switching later means a fresh database
    no permissions needed). The bot can only message people who share a server with
    it, and those people must allow direct messages from server members.
 
-Google, Apple and email login/reset show "unavailable: the email service is not
-working right now" in the game. That is expected for now.
+Google, Apple and email: a sign in method whose keys are empty in `master.env` is hidden on the log in page.
+Email (confirming an address after sign up, password and username codes) goes through Amazon SES: see
+`EMAIL_PROVIDER=ses` in `rrolf/MasterServer/c/.env.example`. At most `EMAIL_DAILY_LIMIT` (50) emails go out per day.
 
 ## Step 6: Cloudflare tunnel (makes your servers reachable, no open ports)
 
@@ -250,9 +251,10 @@ background. Check it:
 curl https://api-game.parshwa.blog/health        # {"ok":true,"db":"postgres"}
 curl https://game.parshwa.blog/health            # {"ok":true}
 ```
-Then open **https://game.parshwa.blog**, click **Sign up**, make an account, and
-play. Gardn is at **https://game.parshwa.blog/gardn/** and uses the same login
-(log in on the main page first).
+Then open **https://game.parshwa.blog**: without a login it sends you to the page
+**/login** (log in, **/signup**, confirm your email with the code we send, forgot password or username).
+Make an account there and it brings you back to the game. Gardn is at
+**https://game.parshwa.blog/gardn/** and uses the same login (it sends you to /login too).
 
 Logs: `builds/<os>-<arch>/run/<name>.log`.
 
@@ -264,7 +266,9 @@ Logs: `builds/<os>-<arch>/run/<name>.log`.
   `rrolf/tools/ctf/README.md`. Set `MINIGAMES_PIN` in `secrets/master.env`: a match started with that PIN counts for the
   accounts' wins.
 * New env values in `secrets/master.env` (all optional, see `rrolf/MasterServer/c/.env.example`): `GOOGLE_*`, `APPLE_*`
-  for the sign in, `EMAIL_API_*` for the codes by email.
+  for the sign in, `EMAIL_PROVIDER=ses` + `AWS_*` for the codes by email. Lines marked `#TODO: ADD THE INFO` are the
+  ones still empty. An Apple key (`*.p8`) goes in `secrets/` and is sent with the `.env` files.
+* Logging in is the static page `rrolf/Client/public/login.html` (`/login`, `/signup`), not part of the game client.
 * `phones/` has the Android and iOS apps that load the site (see its README).
 
 ## Everyday commands
