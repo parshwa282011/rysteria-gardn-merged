@@ -190,8 +190,8 @@ The same master code runs on either; switching later means a fresh database
    it, and those people must allow direct messages from server members.
 
 Google, Apple and email: a sign in method whose keys are empty in `master.env` is hidden on the log in page.
-Email (confirming an address after sign up, password and username codes) goes through Amazon SES: see
-`EMAIL_PROVIDER=ses` in `rrolf/MasterServer/c/.env.example`. At most `EMAIL_DAILY_LIMIT` (50) emails go out per day.
+Email (confirming an address after sign up, password and username codes) goes through Resend's events API: see
+`RESEND_API_KEY` in `rrolf/MasterServer/c/.env.example` and the Resend part of [`KEYS.md`](KEYS.md). At most `EMAIL_DAILY_LIMIT` (50) emails go out per day.
 
 ## Step 6: Cloudflare tunnel (makes your servers reachable, no open ports)
 
@@ -266,11 +266,11 @@ Logs: `builds/<os>-<arch>/run/<name>.log`.
   `rrolf/tools/ctf/README.md`. Set `MINIGAMES_PIN` in `secrets/master.env`: a match started with that PIN counts for the
   accounts' wins.
 * New env values in `secrets/master.env` (all optional, see `rrolf/MasterServer/c/.env.example`): `GOOGLE_*`, `APPLE_*`
-  for the sign in, `EMAIL_PROVIDER=ses` + `AWS_*` for the codes by email. Lines marked `#TODO: ADD THE INFO` are the
+  for the sign in, `RESEND_API_KEY` for the codes by email. Lines marked `#TODO: ADD THE INFO` are the
   ones still empty. An Apple key (`*.p8`) goes in `secrets/` and is sent with the `.env` files.
 * Logging in is the static page `rrolf/Client/public/login.html` (`/login`, `/signup`), not part of the game client.
 * `phones/` has the Android and iOS apps that load the site, `scripts-phones/` builds, runs and publishes them (by hand, on
-  your laptop only). [`KEYS.md`](KEYS.md) says where to get every key, id and file (Discord, Google, Apple, Amazon SES) and [`APPLE.md`](APPLE.md)
+  your laptop only). [`KEYS.md`](KEYS.md) says where to get every key, id and file (Discord, Google, Apple, Resend) and [`APPLE.md`](APPLE.md)
   walks through the whole Apple side (IDs, Sign in with Apple, email relay, TestFlight) and [`APPLE_PRODUCTION.md`](APPLE_PRODUCTION.md)
   is the App Store submission and review.
 

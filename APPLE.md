@@ -99,14 +99,13 @@ What to enter (Apple wants a domain or an address that passes SPF or DKIM):
 
 | Field | Put |
 |---|---|
-| Domains | `email.parshwa.blog` (the domain in `EMAIL_FROM`) |
-| Email Addresses | `noreply@email.parshwa.blog` (the exact `EMAIL_FROM`) |
+| Domains | the domain the Resend automation sends from |
+| Email Addresses | the exact sender address of that automation |
 
-Entering the domain is enough; adding the address too does no harm. Apple then checks the domain's DNS: Amazon SES with
-*Easy DKIM* (step 2 of the SES part in [`KEYS.md`](KEYS.md): the three CNAME records) satisfies **DKIM**. To satisfy
-**SPF** as well, set a custom MAIL FROM domain in SES: *Identities > email.parshwa.blog > Authentication > Custom
-MAIL FROM domain* `mail.email.parshwa.blog`, then add the **MX** and **TXT** (SPF) records it shows in Cloudflare DNS.
-Wait until SES says *Verified*, then press **Save** on Apple's page. Test: sign in with Apple on the website choosing
+Entering the domain is enough; adding the address too does no harm. Apple then checks the domain's DNS: Resend's
+verified domain (the DKIM and SPF records Resend shows when you add the domain, see [`KEYS.md`](KEYS.md)) satisfies it.
+The address and domain must be the ones the Resend automation sends from. Wait until Resend says *Verified*, then press
+**Save** on Apple's page. Test: sign in with Apple on the website choosing
 *Hide My Email*, then ask for a password reset for that account and type the relay address: the mail must arrive.
 
 Finally fill `secrets/master.env`:

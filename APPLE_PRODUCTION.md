@@ -29,7 +29,7 @@ Apple's console changes its wording now and then. Where a name below is not on y
   you start the queue again. Have the master, the game servers, gardn and the edge running on c1 with the Pi as the
   failover (the sync system), and look at `https://api-game.parshwa.blog/health` yourself every day until approval.
 * `ios-deploy.sh --production` checks that `/`, `/privacy`, `/terms`, `/account` and `/login` answer 200 before it uploads.
-* Email works (the demo login needs none, but a reviewer may try a sign up): SES **out of the sandbox** (KEYS.md).
+* Email works (the demo login needs none, but a reviewer may try a sign up): the Resend automation is live (KEYS.md).
 * Keep `EMAIL_DAILY_LIMIT` at least at 50, a review can use a dozen codes.
 * Apple sign in works on the website (a private window, "Sign in with Apple").
 

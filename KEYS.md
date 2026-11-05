@@ -11,7 +11,7 @@ Your domain below is `parshwa.blog`; the website is `game.parshwa.blog` and the 
 | Discord client id / secret / bot token | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN` |
 | Google client id / secret | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
 | Apple Services ID, Team ID, Key ID, `.p8`, domain file | `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY_FILE`, `APPLE_DOMAIN_FILE` |
-| AWS access key id / secret / region | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` (+ `EMAIL_PROVIDER=ses`, `EMAIL_FROM`) |
+| Resend API key | `RESEND_API_KEY` (+ `RESEND_EVENT`) |
 
 Never paste these into chat, an issue or a commit. If one leaks, make a new one in the same console and delete the old.
 
@@ -71,24 +71,19 @@ https://developer.apple.com/account > *Certificates, Identifiers & Profiles*.
    Continue → Register. **Download the `.p8` now (only once)** into `secrets/` (e.g. `secrets/apple.p8`);
    the **Key ID** on that page → `APPLE_KEY_ID`; `APPLE_PRIVATE_KEY_FILE=~/.rysteria-secrets/apple.p8`.
 
-## Amazon SES (the emails: confirm address, password and username codes)
+## Resend (the emails: confirm address, password and username codes)
 
-1. https://console.aws.amazon.com > pick a region (e.g. *US East (N. Virginia)*) and **keep using that region**: it
-   goes in `AWS_REGION` (e.g. `us-east-1`).
-2. **Amazon SES > Configuration > Identities > Create identity > Domain**: `email.parshwa.blog` (the part of
-   `EMAIL_FROM` after the `@`). Leave *Easy DKIM* on. SES shows 3 **CNAME** records: add them in Cloudflare DNS
-   (DNS only, grey cloud). Optional but good: a TXT `_dmarc.email.parshwa.blog` = `v=DMARC1; p=none`. The identity
-   turns *Verified* in minutes.
-3. **Get out of the sandbox**: *Account dashboard > Request production access* (mail type *Transactional*, website
-   `https://game.parshwa.blog`, say it sends one-time codes only to people who asked and that bounces are
-   handled). Until it is granted SES only delivers to addresses you verified yourself (add your own under
-   *Identities > Create identity > Email address* to test). Approval usually takes a day.
-4. **IAM > Users > Create user** `rysteria-ses` (no console access). *Add permissions > Create inline policy*:
-   action `ses:SendEmail`, resource = the identity's ARN (or `*`). Then *Security credentials > Create access key >
-   Application running outside AWS*: copy the **Access key id** → `AWS_ACCESS_KEY_ID` and the **Secret access key**
-   → `AWS_SECRET_ACCESS_KEY` (shown once).
-5. `EMAIL_PROVIDER=ses`, `EMAIL_FROM=noreply@email.parshwa.blog`. The master sends at most `EMAIL_DAILY_LIMIT` (50)
-   emails a day; set an SES sending quota as well if you want a hard limit that survives restarts.
+The master calls Resend's events API (`POST https://api.resend.com/events/send`) with
+`{"event": RESEND_EVENT, "email": <recipient>, "payload": {"subject", "text", "OTP"}}`. Resend then runs the
+**automation** that starts on that event, so the sender address and the layout are set there, not in the master.
+
+1. https://resend.com > **API Keys > Create API Key** with permission **Full access** (a "Sending access" key is
+   refused by this endpoint with `restricted_api_key`). Copy it → `RESEND_API_KEY`.
+2. **Domains**: add and verify your sending domain (the DNS records go into Cloudflare, DNS only).
+3. **Automations > Create**: trigger = event `OTP SEND` (the value of `RESEND_EVENT`), step = **Send email** from
+   an address on the verified domain; subject `{{{subject}}}`, body `{{{text}}}` (the payload fields; `OTP` holds
+   just the code if you want to lay it out yourself, empty for mails that have none). Set it live.
+4. `RESEND_EVENT=OTP SEND`. The master sends at most `EMAIL_DAILY_LIMIT` (50) emails a day.
 
 ## Already set up on your side
 
