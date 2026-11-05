@@ -105,6 +105,8 @@ setup_build_env() {
         # emscripten's closure compiler needs java
         command -v java >/dev/null 2>&1 || export PATH="$prefix/opt/openjdk/bin:$PATH"
     fi
+    # emscripten's closure compiler needs Java 21+; a JRE unpacked in ~/.local/jdk21 (Debian 12 only has 17) comes first
+    [ -x "$HOME/.local/jdk21/bin/java" ] && export PATH="$HOME/.local/jdk21/bin:$PATH"
     # emsdk installed by debian/setup.sh
     if [ -f "$HOME/emsdk/emsdk_env.sh" ] && ! command -v emcc >/dev/null 2>&1; then
         # shellcheck disable=SC1091
