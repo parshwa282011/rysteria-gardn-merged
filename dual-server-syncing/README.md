@@ -114,7 +114,7 @@ whole machine) dies first, everything the players in the world held would be los
 * **every start of a master** first turns the rows into saves (`gardn.saves`, one new save per
   player, score 0 is skipped, the oldest saves go past the limit), empties the table, and only then
   starts serving. So after a crash or a planned restart the players find their last state on the
-  death screen. A master that is a **standby** (`sync.role` says standby) leaves the rows alone:
+  death screen. A master that is a **standby** (`sync-state.json` says `wasPrimary: false`) leaves the rows alone:
   they are the primary's, kept for the takeover.
 * **a takeover** does the same on the machine that takes over: syncd asks the local master
   (`POST /srv/gardn/backup/restore`, server secret) to turn the copied rows into saves before the

@@ -517,9 +517,9 @@ compose_env() {
             cat "$RS_SECRETS_DIR/master.env" >"$env_file"
             # the master names itself in /health and serves /backup to the backups
             env_set "$env_file" NODE_NAME "$(sync_node_name)"
-            # a standby (syncd writes this file) keeps the primary's crash backups
-            # for a takeover instead of turning them into saves when it starts
-            sync_enabled && env_set "$env_file" SYNC_ROLE_FILE "$RS_RUN/sync.role"
+            # a standby (syncd's state file says wasPrimary: false) keeps the primary's
+            # crash backups for a takeover instead of turning them into saves when it starts
+            sync_enabled && env_set "$env_file" SYNC_STATE_FILE "$RS_SECRETS_DIR/sync-state.json"
             # a game server that drops its connection without saying it is
             # stopping is started again, once (restart-one.sh). Off with
             # RESTART_DROPPED_SERVERS=0 in common.env
