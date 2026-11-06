@@ -173,7 +173,7 @@ done
 # ---------------------------------------------------------------- 4. build
 say "4. building (the first machine everything, the others without the web clients)"
 for ((i = 0; i < N; i++)); do
-    flags="--skip-clients"; [ "$i" = 0 ] && flags=""
+    flags=""; [ "$i" = 0 ] && flags=""
     act "$i" "build ${flags:-(everything)}" FLAGS="$flags" <<'EOF'
 cd "$REPO"
 rm -f /tmp/quick-deploy-build.done
