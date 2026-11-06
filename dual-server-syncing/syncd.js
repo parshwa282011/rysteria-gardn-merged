@@ -306,6 +306,26 @@ async function fence(old) {
     else log(`could not stop ${old.name} (ssh exit ${r.code}${r.timedOut ? ', timed out' : ''}): ${r.out.split('\n').slice(-2).join(' | ')}; taking over anyway`);
 }
 
+// The old primary kept a list of the players in the gardn world (gardn.crash_backups,
+// copied here with everything else). Before anybody is let in, the local master turns it
+// into saves, so that the players of a server that died get their petals back.
+async function restoreCrashBackups() {
+    if (!env.SERVER_SECRET) return log('no SERVER_SECRET: the crash backups are not turned into saves');
+    try {
+        const res = await fetch(`${LOCAL}/srv/gardn/backup/restore`, {
+            method: 'POST',
+            headers: { 'x-server-secret': env.SERVER_SECRET, 'content-type': 'application/json' },
+            body: '{}',
+            signal: AbortSignal.timeout(20000),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 200) log(`crash backups turned into saves: ${body.moved}`);
+        else log(`crash backups: the master answered ${res.status}`);
+    } catch (e) {
+        log(`crash backups: ${e.message}`);
+    }
+}
+
 async function promote(forced) {
     const loc = await health(`${LOCAL}/health`);
     if (!loc.ok) {
@@ -325,6 +345,7 @@ async function promote(forced) {
     state = { ...state, wasPrimary: true, primary: me.name, source: '', cursor: '', failures: 0 };
     saveState();
     setRole('primary');
+    await restoreCrashBackups();
     log(`${forced ? 'FORCED ' : ''}taking over: starting the tunnel`);
     const r = await sh(runScript, [], { timeout: 300000 });
     if (r.code !== 0) log(`run.sh exit ${r.code}: ${r.out.split('\n').slice(-3).join(' | ')}`);

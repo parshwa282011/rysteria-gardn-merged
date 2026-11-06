@@ -101,6 +101,28 @@ yet, and only finished transactions are returned, so a slow write is never skipp
 kept 3 days; a backup that was off longer takes a snapshot. `GET /health` now also says which
 node answered (`"node"`) and whether it can serve backups (`"backup"`).
 
+## Gardn crash backups (players of a server that died get their petals back)
+
+A gardn player's loadout only becomes a save when they die or leave. If the gardn server (or the
+whole machine) dies first, everything the players in the world held would be lost. So:
+
+* every 30 seconds the gardn server tells the master who is in the world (account, score, loadout);
+  the master keeps exactly this list in `gardn.crash_backups`. A player who left, or is not
+  reported, is removed from it. Players without an account are not listed (they cannot have saves).
+  Nothing is sent while nobody is in the world, except the one list that says the last player left.
+* the table is copied to the backup servers like every other table.
+* **every start of a master** first turns the rows into saves (`gardn.saves`, one new save per
+  player, score 0 is skipped, the oldest saves go past the limit), empties the table, and only then
+  starts serving. So after a crash or a planned restart the players find their last state on the
+  death screen. A master that is a **standby** (`sync.role` says standby) leaves the rows alone:
+  they are the primary's, kept for the takeover.
+* **a takeover** does the same on the machine that takes over: syncd asks the local master
+  (`POST /srv/gardn/backup/restore`, server secret) to turn the copied rows into saves before the
+  tunnel starts.
+
+The copy is at most one sync interval (30 s) behind, plus the 30 s of the gardn report. A player who
+died in the last seconds before the crash can get one save too many (the report still listed them).
+
 ## Clone mode (split mode)
 
 With `SYNC_MODE=clone` and `SYNC_PRIMARY_URL=http://<master>:<port>` in its `.env` (written by
