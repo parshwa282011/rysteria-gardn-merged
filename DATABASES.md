@@ -112,6 +112,7 @@ are dropped as they are found.
 | `~/.rysteria-secrets/apple-rysteria.p8` | the Sign in with Apple key |
 | `backup/*.sql.gz`, `backup/*.dump` | `pg_dump` copies of the database (git-ignored) |
 | `builds/` | the built servers and clients (git-ignored) |
+| `rrolf/Client/public/changelog.txt` | the changelog of both games (served at `/changelog.txt`, read by both clients when they start). Not a database, but it is the one file both games share |
 
 ## In the browser (`localStorage`)
 
