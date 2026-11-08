@@ -42,7 +42,14 @@ def nodes():
 
 
 def ask(target, key, sql):
-    """runs the SQL with psql on the machine, with the POSTGRES_URI of its master.env, returns the lines"""
+    """runs the SQL with psql on the machine, with the POSTGRES_URI of its master.env, returns the lines.
+    A target that starts with postgres:// is a database to reach from here, for tests."""
+    if target.startswith("postgres"):
+        result = subprocess.run(["psql", target, "-Atq", "-v", "ON_ERROR_STOP=1"], input=sql, capture_output=True, text=True)
+        if result.returncode != 0:
+            sys.stderr.write("could not ask the database: %s\n" % (result.stderr or "").strip()[-400:])
+            sys.exit(2)
+        return [line for line in result.stdout.splitlines() if line.strip()]
     remote = ("bash -l -c 'U=$(grep -E \"^POSTGRES_URI=\" ~/.rysteria-secrets/master.env | cut -d= -f2-); "
               "[ -n \"$U\" ] || { echo no POSTGRES_URI in master.env >&2; exit 3; }; psql \"$U\" -Atq -v ON_ERROR_STOP=1'")
     cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
@@ -98,6 +105,11 @@ def main():
     args = parser.parse_args()
 
     known = nodes()
+    # a postgres://... address instead of a name is a database to reach from here (tests)
+    for flag, label in (("a", "db1"), ("b", "db2")):
+        if getattr(args, flag).startswith("postgres"):
+            known[label] = getattr(args, flag)
+            setattr(args, flag, label)
     names = list(known)
     if len(names) < 2 and not (args.a and args.b):
         sys.exit("nodes.conf has fewer than two machines")

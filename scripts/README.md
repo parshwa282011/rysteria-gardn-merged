@@ -173,3 +173,17 @@ are on both but not the same. `--detail` names the columns that differ and shows
 hash, the token key and the provider token only say "differs"). The Pi copies c1 every few seconds, so a row
 that changed a moment ago can show up: run it again. Exit code 0 = the same, 1 = different, 2 = could not ask.
 
+## Making the two databases the same
+
+`python3 scripts/reconcile-db.py` asks about every row that is not the same on c1 and the Pi: the table, the
+key, whose account it is (username, when it was made, last login, the email only as yes / no), which columns
+differ and what they hold on each side (the secret columns only say "differs"). Per row you answer: keep c1's
+version, keep the Pi's, or (for a row that is only on one side) copy it over or delete it, skip, or stop;
+`1!` / `2!` / `c!` / `d!` answer for everything that is left. It ends with the plan. Nothing is changed unless you
+add `--apply` and type `yes`: then it makes a `pg_dump` on each machine it writes to
+(`~/rysteria-before-reconcile-<time>.dump`, restore with `pg_restore --clean`), checks that every row is still the
+way you saw it (a row that moved meanwhile is skipped and listed), and changes each machine in one transaction.
+A change to c1 (the primary) is copied to the Pi by syncd; a change to the Pi is made quietly so that it is not
+copied back. Deleting an account deletes its saves, links, player and leaderboard rows with it.
+c1 is live: a row that changed a few seconds ago is only on its way to the Pi, so it says so on the card.
+
