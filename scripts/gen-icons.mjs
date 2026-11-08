@@ -1,49 +1,43 @@
 #!/usr/bin/env node
-// Makes the pictures of the web pages with the games themselves.
+// Makes the picture of every petal for the web pages (the stats pages) with the games
+// themselves. scripts/common/build.sh runs it after the clients are built.
 //
-//   node scripts/gen-icons.mjs [--rrolf DIR] --gardn DIR [--out DIR] [--chrome PATH]
+//   node scripts/gen-icons.mjs --rrolf DIR --gardn DIR --out DIR [--chrome PATH]
 //
-// DIR is a folder with a built client (index.html, the .js and .wasm). Gardn's client has
-// a hidden mode: the page opened with ?iconsheet draws every petal, as its loadout does,
-// instead of playing (gardn/Client/IconSheet.cc). This script opens that in headless
-// Chrome at double resolution and saves what is drawn to rrolf/Client/public/icons/
-// (the stats pages are served from there):
+// DIR is the folder of a built client (index.html, the .js and .wasm): builds/<os>/rrolf-client
+// and builds/<os>/gardn. Both clients have a hidden mode: the page opened with ?iconsheet
+// draws every petal the way its loadout does, without the tile and the name, instead of
+// playing (rrolf/Client/Main.c, gardn/Client/IconSheet.cc). This script opens that in
+// headless Chrome at double resolution and cuts every petal out as its own png (128 px,
+// transparent: the pages put the rarity colour behind it):
 //
-//   gardn-petals.png      column = id % 12, row = id / 12, tiles of 128 px
-//   rysteria-petals.png   (only with --rrolf, a build that has the mode) column = petal id,
-//                         row = rarity, tiles of 128 px
+//   OUT/rysteria/<petal id>-<rarity>.png     (the petal looks different at each rarity)
+//   OUT/gardn/<petal id>.png
 //
-// The petals only, without a tile or a name: the stats pages put the rarity colour behind
-// them. With python3 and Pillow the pictures are also squeezed to 256 colours (a quarter
-// of the size).
-//
-// Run it again after a change to how a petal looks. Chrome is looked for at the usual
-// places, or give it with --chrome or the CHROME environment variable.
+// The pages ask for /icons/rysteria/.. and /icons/gardn/.., so OUT is <client folder>/icons.
+// Without Chrome (or when the games do not draw) nothing is written and the exit code is
+// 1: the build only warns, the pages show the plain coloured tile.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
 const args = Object.fromEntries(process.argv.slice(2).reduce((a, v, i, all) => (v.startsWith("--") ? [...a, [v.slice(2), all[i + 1]]] : a), []));
-const out = args.out || path.join(here, "..", "rrolf", "Client", "public", "icons");
-const rrolfDir = args.rrolf, gardnDir = args.gardn;
-if (!gardnDir) {
-    console.error("usage: node scripts/gen-icons.mjs [--rrolf DIR] --gardn DIR [--out DIR] [--chrome PATH]");
+const rrolfDir = args.rrolf, gardnDir = args.gardn, out = args.out;
+if (!rrolfDir || !gardnDir || !out) {
+    console.error("usage: node scripts/gen-icons.mjs --rrolf DIR --gardn DIR --out DIR [--chrome PATH]");
     process.exit(2);
 }
 const chromePath = args.chrome || process.env.CHROME || [
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium", "/usr/bin/chromium-browser",
 ].find(existsSync);
-if (!chromePath) { console.error("Chrome was not found: use --chrome"); process.exit(2); }
-mkdirSync(out, { recursive: true });
+if (!chromePath) { console.error("gen-icons: Chrome was not found (--chrome PATH or CHROME)"); process.exit(1); }
 
-const types = { ".html": "text/html", ".js": "application/javascript", ".wasm": "application/wasm", ".png": "image/png", ".ico": "image/x-icon" };
+const types = { ".html": "text/html", ".js": "application/javascript", ".wasm": "application/wasm", ".png": "image/png", ".ico": "image/x-icon", ".txt": "text/plain" };
 const server = http.createServer((req, res) => {
     let p = decodeURIComponent(req.url.split("?")[0]);
-    let root = rrolfDir || gardnDir;
+    let root = rrolfDir;
     if (p === "/gardn" || p.startsWith("/gardn/")) { root = gardnDir; p = p.slice(6) || "/"; }
     if (p === "/" || p === "") p = "/index.html";
     const file = path.join(root, path.normalize(p));
@@ -55,75 +49,89 @@ const base = "http://127.0.0.1:" + server.address().port;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const profile = path.join(process.env.TMPDIR || "/tmp", "gen-icons-profile-" + process.pid);
-const chrome = spawn(chromePath, ["--headless=new", "--remote-debugging-port=9347", "--user-data-dir=" + profile, "--no-first-run",
-    "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "about:blank"], { stdio: "ignore" });
-let tabs;
-for (let i = 0; i < 80; i++) { try { tabs = await (await fetch("http://127.0.0.1:9347/json")).json(); if (tabs.length) break; } catch (e) {} await sleep(250); }
-const ws = new WebSocket(tabs.find((t) => t.type === "page").webSocketDebuggerUrl);
-await new Promise((r) => (ws.onopen = r));
-let id = 0; const waiting = new Map();
-ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && waiting.has(d.id)) { waiting.get(d.id)(d); waiting.delete(d.id); } };
-const send = (method, params = {}) => new Promise((r) => { const i = ++id; waiting.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-await send("Page.enable"); await send("Runtime.enable");
-// gardn goes to the log in page when it finds no login, the picture needs none
-await send("Page.addScriptToEvaluateOnNewDocument", { source: "window.gardnLogin={uuid:'',plp:''}; try{localStorage['uuid']='00000000-0000-4000-8000-000000000000';localStorage['PL-P']='x';localStorage['PL-T']='x';}catch(e){}" });
+const chrome = spawn(chromePath, ["--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile, "--no-first-run",
+    "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+// Chrome says where its debugging port is on stderr
+const port = await new Promise((resolve, reject) => {
+    let log = "";
+    chrome.stderr.on("data", (d) => { log += d; const m = /DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//.exec(log); if (m) resolve(+m[1]); });
+    chrome.on("exit", () => reject(new Error("Chrome stopped: " + log.slice(-300))));
+    setTimeout(() => reject(new Error("Chrome did not start")), 30000);
+}).catch((e) => { console.error("gen-icons: " + e.message); chrome.kill(); server.close(); process.exit(1); });
 
-// opens the page, waits for the game to draw, and saves a part of the canvas as a png
-async function shot(url, width, height, parts) {
-    await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 2, mobile: false });
-    await send("Page.navigate", { url });
-    await sleep(7000);
-    for (const [name, x, y, w, h] of parts) {
+let exitCode = 0;
+try {
+    const tabs = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+    const ws = new WebSocket(tabs.find((t) => t.type === "page").webSocketDebuggerUrl);
+    await new Promise((r) => (ws.onopen = r));
+    let id = 0; const waiting = new Map();
+    ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && waiting.has(d.id)) { waiting.get(d.id)(d); waiting.delete(d.id); } };
+    const send = (method, params = {}) => new Promise((r) => { const i = ++id; waiting.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+    await send("Page.enable"); await send("Runtime.enable");
+    // gardn goes to the log in page when it finds no login, the picture needs none
+    await send("Page.addScriptToEvaluateOnNewDocument", { source: "window.gardnLogin={uuid:'',plp:''}; try{localStorage['uuid']='00000000-0000-4000-8000-000000000000';localStorage['PL-P']='x';localStorage['PL-T']='x';}catch(e){}" });
+
+    // opens the sheet of a game and returns what it says about it (window.iconSheetInfo)
+    async function open(url, width) {
+        await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 2, mobile: false });
+        await send("Page.navigate", { url });
+        for (let i = 0; i < 40; i++) {
+            await sleep(500);
+            const r = await send("Runtime.evaluate", { returnByValue: true, expression: 'window["iconSheetInfo"]' });
+            if (r.result.result && r.result.result.value) { await sleep(1500); return r.result.result.value; }
+        }
+        throw new Error("the game at " + url + " did not draw its icons (is it a build with the ?iconsheet mode?)");
+    }
+    // Every tile cut out of the canvas, as png data: [[name, dataUrl], ...]. The petals
+    // are drawn at the size they have in the game, so the single ones are small next to
+    // the clumps: all the tiles of a sheet are scaled up by the same amount, until the
+    // widest one (measured from the centre of its tile) nearly fills it.
+    async function cut(tiles, size) {
         const r = await send("Runtime.evaluate", {
             returnByValue: true,
-            expression: `(() => { const c = document.querySelector("canvas"); const o = document.createElement("canvas"); o.width = ${w}; o.height = ${h};
-                o.getContext("2d").drawImage(c, ${x}, ${y}, ${w}, ${h}, 0, 0, ${w}, ${h}); return o.toDataURL("image/png"); })()`,
+            expression: `(() => { const c = document.querySelector("canvas"); const S = ${size};
+                const t = document.createElement("canvas"); t.width = t.height = S; const tx = t.getContext("2d", { willReadFrequently: true });
+                const o = document.createElement("canvas"); o.width = o.height = S; const ox = o.getContext("2d");
+                const list = ${JSON.stringify(tiles)};
+                let reach = 1;
+                for (const [name, sx, sy] of list) {
+                    tx.clearRect(0, 0, S, S); tx.drawImage(c, sx, sy, S, S, 0, 0, S, S);
+                    const d = tx.getImageData(0, 0, S, S).data;
+                    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++)
+                        if (d[(y * S + x) * 4 + 3] > 8) reach = Math.max(reach, Math.abs(x + 0.5 - S / 2), Math.abs(y + 0.5 - S / 2));
+                }
+                const k = (S / 2 * 0.94) / reach;
+                return list.map(([name, sx, sy]) => { ox.clearRect(0, 0, S, S); ox.save(); ox.translate(S / 2, S / 2); ox.scale(k, k);
+                    ox.drawImage(c, sx, sy, S, S, -S / 2, -S / 2, S, S); ox.restore(); return [name, o.toDataURL("image/png")]; }); })()`,
         });
-        const data = r.result.result && r.result.result.value;
-        if (!data || !data.startsWith("data:image/png")) throw new Error("no picture for " + name + ": " + JSON.stringify(r.result));
-        writeFileSync(path.join(out, name), Buffer.from(data.split(",")[1], "base64"));
-        squeeze(path.join(out, name));
-        console.log("wrote", path.join(out, name), w + "x" + h);
+        if (!r.result.result || !Array.isArray(r.result.result.value)) throw new Error("no picture: " + JSON.stringify(r.result));
+        return r.result.result.value;
     }
-}
-
-import { execFileSync } from "node:child_process";
-function squeeze(file) {
-    try {
-        execFileSync("python3", ["-c", "import sys; from PIL import Image; f = sys.argv[1]; Image.open(f).convert('RGBA').quantize(colors=256, method=Image.Quantize.FASTOCTREE).save(f, optimize=True)", file]);
-    } catch (e) { console.log("(not squeezed: python3 with Pillow is needed)"); }
-}
-
-// the games say how many tiles there are (window.iconSheetInfo), so nothing here has to
-// change when a petal is added
-async function sheetInfo() {
-    const r = await send("Runtime.evaluate", { returnByValue: true, expression: "window[\"iconSheetInfo\"]" });
-    const info = r.result.result && r.result.result.value;
-    if (!info) throw new Error("the game did not draw its icons (is it a build with the ?iconsheet mode?)");
-    return info;
-}
-
-try {
-    if (rrolfDir) {
-        // Rysteria: a column for every petal id, a row for every rarity, tiles of 64 css px
-        await send("Emulation.setDeviceMetricsOverride", { width: 3000, height: 800, deviceScaleFactor: 2, mobile: false });
-        await send("Page.navigate", { url: base + "/?iconsheet" });
-        await sleep(7000);
-        const info = await sheetInfo();
-        console.log("Rysteria:", JSON.stringify(info));
-        await shot(base + "/?iconsheet", info.columns * 64 + 100, info.rows * 64 + 100,
-            [["rysteria-petals.png", 0, 0, info.columns * 128, info.rows * 128]]);
+    function save(dir, list) {
+        mkdirSync(path.join(out, dir), { recursive: true });
+        for (const [name, data] of list) writeFileSync(path.join(out, dir, name), Buffer.from(data.split(",")[1], "base64"));
+        console.log("gen-icons: " + list.length + " icons in " + path.join(out, dir));
     }
-    // gardn: the petals in rows of 12
-    await send("Emulation.setDeviceMetricsOverride", { width: 1200, height: 800, deviceScaleFactor: 2, mobile: false });
-    await send("Page.navigate", { url: base + "/gardn/?iconsheet" });
-    await sleep(7000);
-    const info = await sheetInfo();
-    console.log("gardn:", JSON.stringify(info));
-    await shot(base + "/gardn/?iconsheet", info.columns * 64 + 100, info.rows * 64 + 100,
-        [["gardn-petals.png", 0, 0, info.columns * 128, info.rows * 128]]);
+
+    // Rysteria: a column for every petal id, a row for every rarity
+    let info = await open(base + "/?iconsheet", 3000);
+    let tiles = [];
+    for (let rarity = 0; rarity < info.rows; ++rarity)
+        for (let petal = 1; petal < info.columns; ++petal)
+            tiles.push([`${petal}-${rarity}.png`, petal * info.cell * 2, rarity * info.cell * 2]);
+    save("rysteria", await cut(tiles, info.cell * 2));
+
+    // gardn: 12 to a row
+    info = await open(base + "/gardn/?iconsheet", 1200);
+    tiles = [];
+    for (let petal = 1; petal < info.count; ++petal)
+        tiles.push([`${petal}.png`, (petal % info.columns) * info.cell * 2, Math.floor(petal / info.columns) * info.cell * 2]);
+    save("gardn", await cut(tiles, info.cell * 2));
+} catch (e) {
+    console.error("gen-icons: " + e.message);
+    exitCode = 1;
 } finally {
     chrome.kill();
     server.close();
 }
-process.exit(0);
+process.exit(exitCode);

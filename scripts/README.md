@@ -154,3 +154,13 @@ is copied over on every run): `CERT_EMAIL`, `CLOUDFLARE_API_TOKEN` (Zone > DNS >
 and optionally `MAIL_ACCOUNTS`. After that `run.sh` / `stop.sh` start and stop the mail
 server too. Only webmail goes through the tunnel; the mail ports (25, 465, 587, 143,
 993, plus 80 for the certificate) must be open on your router.
+
+## Petal icons for the stats pages
+
+`build.sh` (with the clients) runs `scripts/gen-icons.mjs` last: both clients have a hidden mode
+(`/?iconsheet` for Rysteria, `/gardn/?iconsheet` for gardn) in which the game draws every petal as its
+loadout does instead of playing, and headless Chrome cuts each petal out as a png into
+`rrolf-client/icons/rysteria/<id>-<rarity>.png` and `rrolf-client/icons/gardn/<id>.png`. The pages
+`/status` and `/gardn/stats` show them. It needs Chrome on the machine that builds the clients (c1); without
+it the build says so and the pages show plain coloured tiles. The Pi gets the icons with the clients
+(`scripts/sync-clients.sh`).

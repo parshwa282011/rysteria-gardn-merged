@@ -165,6 +165,24 @@ if [ "$skip_clients" = 0 ]; then
     run mkdir -p "$RS_TARGET/rrolf-client"
     run cp -R "$RS_ROOT/rrolf/Client/public/." "$RS_TARGET/rrolf-client/"
     run cp "$RS_WORK/rrolf-client/rrolf-client.js" "$RS_WORK/rrolf-client/rrolf-client.wasm" "$RS_TARGET/rrolf-client/"
+
+    # A picture of every petal for the stats pages (/status and /gardn/stats): the two
+    # clients draw them (the ?iconsheet mode) and scripts/gen-icons.mjs saves each one
+    # as a png in rrolf-client/icons, the folder the pages ask. It needs Chrome (headless)
+    # and takes about half a minute. Without it the build still works, the pages show
+    # plain coloured tiles.
+    if has_kind gardn; then
+        for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
+            [ "${SV_KIND[$i]}" = gardn ] && gardn_folder="$RS_TARGET/${SV_NAME[$i]}"
+        done
+        log "petal icons for the stats pages"
+        if [ "$RS_DRY_RUN" = 1 ]; then
+            echo "[dry-run] node scripts/gen-icons.mjs --rrolf $RS_TARGET/rrolf-client --gardn $gardn_folder --out $RS_TARGET/rrolf-client/icons"
+        elif ! node "$RS_ROOT/scripts/gen-icons.mjs" --rrolf "$RS_TARGET/rrolf-client" --gardn "$gardn_folder" \
+            --out "$RS_TARGET/rrolf-client/icons"; then
+            warn "no petal icons this time (it needs Chrome, see scripts/gen-icons.mjs): the stats pages show plain tiles"
+        fi
+    fi
 fi
 
 # .env last: each file is composed from ~/.rysteria-secrets/ after its folder exists
