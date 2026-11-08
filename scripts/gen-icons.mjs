@@ -72,8 +72,8 @@ try {
     await send("Page.addScriptToEvaluateOnNewDocument", { source: "window.gardnLogin={uuid:'',plp:''}; try{localStorage['uuid']='00000000-0000-4000-8000-000000000000';localStorage['PL-P']='x';localStorage['PL-T']='x';}catch(e){}" });
 
     // opens the sheet of a game and returns what it says about it (window.iconSheetInfo)
-    async function open(url, width) {
-        await send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 2, mobile: false });
+    async function open(url, width, height) {
+        await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 2, mobile: false });
         await send("Page.navigate", { url });
         for (let i = 0; i < 40; i++) {
             await sleep(500);
@@ -86,23 +86,23 @@ try {
     // are drawn at the size they have in the game, so the single ones are small next to
     // the clumps: all the tiles of a sheet are scaled up by the same amount, until the
     // widest one (measured from the centre of its tile) nearly fills it.
-    async function cut(tiles, size) {
+    async function cut(tiles, size, outSize) {
         const r = await send("Runtime.evaluate", {
             returnByValue: true,
-            expression: `(() => { const c = document.querySelector("canvas"); const S = ${size};
+            expression: `(() => { const c = document.querySelector("canvas"); const S = ${size}, O = ${outSize};
                 const t = document.createElement("canvas"); t.width = t.height = S; const tx = t.getContext("2d", { willReadFrequently: true });
-                const o = document.createElement("canvas"); o.width = o.height = S; const ox = o.getContext("2d");
+                const o = document.createElement("canvas"); o.width = o.height = O; const ox = o.getContext("2d");
                 const list = ${JSON.stringify(tiles)};
                 let reach = 1;
                 for (const [name, sx, sy] of list) {
                     tx.clearRect(0, 0, S, S); tx.drawImage(c, sx, sy, S, S, 0, 0, S, S);
                     const d = tx.getImageData(0, 0, S, S).data;
                     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++)
-                        if (d[(y * S + x) * 4 + 3] > 8) reach = Math.max(reach, Math.abs(x + 0.5 - S / 2), Math.abs(y + 0.5 - S / 2));
+                        if (d[(y * S + x) * 4 + 3] > 8) reach = Math.max(reach, Math.abs(x + 0.5 - S / 2) * O / S, Math.abs(y + 0.5 - S / 2) * O / S);
                 }
-                const k = (S / 2 * 0.94) / reach;
-                return list.map(([name, sx, sy]) => { ox.clearRect(0, 0, S, S); ox.save(); ox.translate(S / 2, S / 2); ox.scale(k, k);
-                    ox.drawImage(c, sx, sy, S, S, -S / 2, -S / 2, S, S); ox.restore(); return [name, o.toDataURL("image/png")]; }); })()`,
+                const k = (O / 2 * 0.94) / reach;
+                return list.map(([name, sx, sy]) => { ox.clearRect(0, 0, O, O); ox.save(); ox.translate(O / 2, O / 2); ox.scale(k, k);
+                    ox.drawImage(c, sx, sy, S, S, -O / 2, -O / 2, O, O); ox.restore(); return [name, o.toDataURL("image/png")]; }); })()`,
         });
         if (!r.result.result || !Array.isArray(r.result.result.value)) throw new Error("no picture: " + JSON.stringify(r.result));
         return r.result.result.value;
@@ -114,19 +114,19 @@ try {
     }
 
     // Rysteria: a column for every petal id, a row for every rarity
-    let info = await open(base + "/?iconsheet", 3000);
+    let info = await open(base + "/?iconsheet", 5000, 1200);
     let tiles = [];
     for (let rarity = 0; rarity < info.rows; ++rarity)
         for (let petal = 1; petal < info.columns; ++petal)
             tiles.push([`${petal}-${rarity}.png`, petal * info.cell * 2, rarity * info.cell * 2]);
-    save("rysteria", await cut(tiles, info.cell * 2));
+    save("rysteria", await cut(tiles, info.cell * 2, 128));
 
     // gardn: 12 to a row
-    info = await open(base + "/gardn/?iconsheet", 1200);
+    info = await open(base + "/gardn/?iconsheet", 1700, 1000);
     tiles = [];
     for (let petal = 1; petal < info.count; ++petal)
         tiles.push([`${petal}.png`, (petal % info.columns) * info.cell * 2, Math.floor(petal / info.columns) * info.cell * 2]);
-    save("gardn", await cut(tiles, info.cell * 2));
+    save("gardn", await cut(tiles, info.cell * 2, 128));
 } catch (e) {
     console.error("gen-icons: " + e.message);
     exitCode = 1;
