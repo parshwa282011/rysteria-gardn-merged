@@ -37,7 +37,6 @@ Every mob has up to four loot entries, a petal and a number (the *seed*). When t
 | Queen Ant | Mandible (0.1), Pellet (0.1), Sand (0.03), Egg (0.03) |
 | Ant Egg | Pellet (0.02) |
 | Baby Ant | Pellet (0.03) |
-| Digger Ant | Sand (0.1), Gravel (0.05), Mandible (0.05) |
 | Snail | nothing: its reward comes from the snail run (below) |
 
 ## What each seed gives
@@ -166,7 +165,7 @@ Used by: **Egg** from Queen Ant
 
 ### Seed 0.05, petal's lowest rarity Common
 
-Used by: **Fossil** from Triceratops; **Pellet** from Dakotaraptor, Ant Hole; **Droplet** from Ornithomimus; **Mandible** from Ant, Ant Hole, Digger Ant; **Stinger** from Honeybee; **Azalea** from Beehive, Beehive Core; **Sand** from House Centipede, Lanternfly
+Used by: **Fossil** from Triceratops; **Pellet** from Dakotaraptor, Ant Hole; **Droplet** from Ornithomimus; **Mandible** from Ant, Ant Hole; **Stinger** from Honeybee; **Azalea** from Beehive, Beehive Core; **Sand** from House Centipede, Lanternfly
 
 | Mob rarity | Nothing | Common | Unusual | Rare | Epic | Legendary | Mythic | Exotic | Ancient |
 |---|---|---|---|---|---|---|---|---|---|
@@ -181,7 +180,7 @@ Used by: **Fossil** from Triceratops; **Pellet** from Dakotaraptor, Ant Hole; **
 
 ### Seed 0.05, petal's lowest rarity Unusual
 
-Used by: **Egg** from T-Rex; **Gravel** from Ankylosaurus, Digger Ant; **Beak** from Quetzalcoatlus; **Magnet** from Dragonfly; **Wax** from Honeybee, Beehive, Beehive Core
+Used by: **Egg** from T-Rex; **Gravel** from Ankylosaurus; **Beak** from Quetzalcoatlus; **Magnet** from Dragonfly; **Wax** from Honeybee, Beehive, Beehive Core
 
 | Mob rarity | Nothing | Common | Unusual | Rare | Epic | Legendary | Mythic | Exotic | Ancient |
 |---|---|---|---|---|---|---|---|---|---|
@@ -226,7 +225,7 @@ Used by: **Seed** from Tree; **Third Eye** from Edmontosaurus
 
 ### Seed 0.1, petal's lowest rarity Common
 
-Used by: **Feather** from Dakotaraptor, Ornithomimus; **Fossil** from Pachycephalosaurus, Quetzalcoatlus, Edmontosaurus; **Pellet** from Ornithomimus, Ant, Dragonfly, Queen Ant; **Bubble** from Ankylosaurus; **Stinger** from Fighter Bee; **Mandible** from Queen Ant; **Sand** from Digger Ant
+Used by: **Feather** from Dakotaraptor, Ornithomimus; **Fossil** from Pachycephalosaurus, Quetzalcoatlus, Edmontosaurus; **Pellet** from Ornithomimus, Ant, Dragonfly, Queen Ant; **Bubble** from Ankylosaurus; **Stinger** from Fighter Bee; **Mandible** from Queen Ant
 
 | Mob rarity | Nothing | Common | Unusual | Rare | Epic | Legendary | Mythic | Exotic | Ancient |
 |---|---|---|---|---|---|---|---|---|---|
