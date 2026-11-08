@@ -164,3 +164,12 @@ loadout does instead of playing, and headless Chrome cuts each petal out as a pn
 `/status` and `/gardn/stats` show them. It needs Chrome on the machine that builds the clients (c1); without
 it the build says so and the pages show plain coloured tiles. The Pi gets the icons with the clients
 (`scripts/sync-clients.sh`).
+
+## Comparing the databases of c1 and the Pi
+
+`python3 scripts/compare-db.py` (read-only, from your computer over ssh) hashes every row of every table of the
+four schemas on both machines and says, per table, how many rows each has, which are only on one side and which
+are on both but not the same. `--detail` names the columns that differ and shows their values (the password
+hash, the token key and the provider token only say "differs"). The Pi copies c1 every few seconds, so a row
+that changed a moment ago can show up: run it again. Exit code 0 = the same, 1 = different, 2 = could not ask.
+
