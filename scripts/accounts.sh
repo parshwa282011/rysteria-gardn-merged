@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
-# Looks at the accounts in the live database and wipes the Rysteria progress of one.
+# Looks at the accounts in the live database and wipes the Parteria progress of one.
 # Run it from your computer: it asks the database on the main machine (the first one
 # in secrets/nodes.conf) over ssh, with the POSTGRES_URI of ~/.rysteria-secrets/master.env
 # there. The database runs on its own, so this works with the game servers stopped.
 #
 #   scripts/accounts.sh list [--dups]        every account: uuid, name, email, last login, how much
-#                                            Rysteria and Gardn data it has. --dups only shows
+#                                            Parteria and Gardn data it has. --dups only shows
 #                                            accounts that share an e-mail address
-#   scripts/accounts.sh wipe <name|uuid>     deletes the Rysteria save of the account and its
-#                                            Rysteria leaderboard rows. The account, its
+#   scripts/accounts.sh wipe <name|uuid>     deletes the Parteria save of the account and its
+#                                            Parteria leaderboard rows. The account, its
 #                                            password and its Gardn saves stay. The player gets a
 #                                            fresh start (5 basic petals) the next time they join
-#   scripts/accounts.sh restore <name|uuid>  puts the Rysteria save back from the copy that
+#   scripts/accounts.sh restore <name|uuid>  puts the Parteria save back from the copy that
 #                                            "wipe" kept (public.wiped_rysteria, the latest one)
+#   scripts/accounts.sh tag <name|uuid> [spider|supporter|none]
+#                                            shows, sets or takes away the tag of an account (the
+#                                            word shown beside the player in Parteria; "spider"
+#                                            also gives their flower the legs of a spider). It
+#                                            shows the next time the player joins a server. An
+#                                            account made before the tags has none
 #
 # Options: --yes (do not ask), --node NAME (another machine of nodes.conf), --key FILE (ssh key,
 #          default ~/.ssh/id_c1), --uri URI (use this database from here instead of a machine)
@@ -27,6 +33,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"
 [ $# -gt 0 ] && shift
 NEEDLE=""; YES=0; DUPS=0; NODE=""; URI=""; KEY=""
+TAGARG=""; HAVE_TAGARG=0
 [ -f "$HOME/.ssh/id_c1" ] && KEY="$HOME/.ssh/id_c1"
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -36,7 +43,9 @@ while [ $# -gt 0 ]; do
     --key) shift; KEY="${1:?--key needs a file}" ;;
     --uri) shift; URI="${1:?--uri needs a postgresql:// address}" ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
-    *) [ -z "$NEEDLE" ] || { echo "one name or uuid at a time" >&2; exit 2; }; NEEDLE="$1" ;;
+    *) if [ -z "$NEEDLE" ]; then NEEDLE="$1"
+       elif [ "$CMD" = tag ] && [ "$HAVE_TAGARG" = 0 ]; then TAGARG="$1"; HAVE_TAGARG=1
+       else echo "one name or uuid at a time" >&2; exit 2; fi ;;
     esac
     shift
 done
@@ -44,7 +53,7 @@ usage() { sed -n 2,/^set/p "$0" | sed '$d; s/^# \{0,1\}//'; exit "${1:-0}"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 case "$CMD" in
 list) ;;
-wipe | restore) [ -n "$NEEDLE" ] || usage 2 ;;
+wipe | restore | tag) [ -n "$NEEDLE" ] || usage 2 ;;
 -h | --help | help | "") usage 0 ;;
 *) usage 2 ;;
 esac
@@ -84,13 +93,24 @@ master_up() {
     [ "$(ssh -n "${SSH_OPTS[@]}" "$TARGET" 'curl -s -m 3 -o /dev/null -w "%{http_code}" http://127.0.0.1:55554/health' 2>/dev/null || true)" = 200 ]
 }
 
+# the tags the game knows (Shared/Tags.h); the name is what is saved and shown
+tag_name() {
+    case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
+    spider) echo Spider ;;
+    supporter) echo Supporter ;;
+    none | "") echo "" ;;
+    *) die "\"$1\" is not a tag (spider, supporter, or none to take it away)" ;;
+    esac
+}
+
 # ------------------------------------------------------------------- list
 if [ "$CMD" = list ]; then
     filter=""; [ "$DUPS" = 1 ] && filter="WHERE dup <> ''"
     pg -P pager=off <<SQL
-SELECT uuid, username, email, dev, created, last_login, xp, pvp, petals, gardn_saves, links, dup FROM (
+SELECT uuid, username, email, dev, tag, created, last_login, xp, pvp, petals, gardn_saves, links, dup FROM (
   SELECT a.uuid, a.username, a.email,
          CASE WHEN a.is_dev THEN 'dev' ELSE '' END AS dev,
+         coalesce(to_jsonb(a) ->> 'tag', '') AS tag,
          to_char(to_timestamp(a.created_at), 'YYYY-MM-DD') AS created,
          CASE WHEN a.last_login_at > 0 THEN to_char(to_timestamp(a.last_login_at), 'YYYY-MM-DD HH24:MI') ELSE '-' END AS last_login,
          coalesce(round(p.xp)::bigint, 0) AS xp,
@@ -118,6 +138,34 @@ $found"
 IFS='|' read -r UUID NAME EMAIL <<<"$found"
 echo "account: $NAME  ($UUID)  ${EMAIL:-no e-mail}"
 
+if [ "$CMD" = tag ]; then
+    # the column is made when the master with the tags starts, until then there is nothing to set
+    current="$(pg -At -v "uuid=$UUID" <<'SQL'
+SELECT coalesce(to_jsonb(a) ->> 'tag', '') FROM accounts.accounts a WHERE uuid = :'uuid';
+SQL
+)"
+    echo "tag: ${current:-none}"
+    [ "$HAVE_TAGARG" = 1 ] || exit 0
+    new="$(tag_name "$TAGARG")" || exit 1
+    [ "$new" != "$current" ] || { echo "already that, nothing to change."; exit 0; }
+    have_col="$(pg -At <<'SQL'
+SELECT count(*) FROM information_schema.columns
+WHERE table_schema = 'accounts' AND table_name = 'accounts' AND column_name = 'tag';
+SQL
+)"
+    [ "$have_col" = 1 ] || die "the database has no tag column yet: it is made when the master server with the tags starts"
+    if [ "$YES" = 0 ]; then
+        printf '\nSet the tag of %s to "%s"? Type the username (%s) to go on: ' "$NAME" "${new:-none}" "$NAME"
+        read -r answer
+        [ "$answer" = "$NAME" ] || die "not confirmed, nothing was changed"
+    fi
+    pg -v "uuid=$UUID" -v "tag=$new" <<'SQL'
+UPDATE accounts.accounts SET tag = :'tag' WHERE uuid = :'uuid';
+SQL
+    echo "done: $NAME now has the tag \"${new:-none}\". It shows when they next join a server."
+    exit 0
+fi
+
 if [ "$CMD" = wipe ]; then
     summary="$(pg -At -F '|' -v "uuid=$UUID" <<'SQL'
 SELECT coalesce(round(p.xp)::bigint::text, 'none'), coalesce(p.pvp_points::text, '-'),
@@ -130,7 +178,7 @@ SQL
     IFS='|' read -r XP PVP PETALS NICK ROWS <<<"$summary"
     echo "rysteria save: xp $XP, pvp points $PVP, $PETALS petals, nickname $NICK, $ROWS leaderboard rows"
     if [ "$XP" = none ] && [ "$ROWS" = 0 ]; then echo "nothing to wipe."; exit 0; fi
-    ACTION="WIPE the Rysteria progress of $NAME"
+    ACTION="WIPE the Parteria progress of $NAME"
 else
     have="$(pg -At -v "uuid=$UUID" <<'SQL'
 SELECT to_char(wiped_at, 'YYYY-MM-DD HH24:MI') FROM public.wiped_rysteria
@@ -139,7 +187,7 @@ SQL
 )" || die "there is no copy of a wipe on this machine (public.wiped_rysteria)"
     [ -n "$have" ] || die "no copy of a wiped save of $NAME"
     echo "the latest copy was made $have"
-    ACTION="RESTORE the Rysteria save of $NAME from that copy"
+    ACTION="RESTORE the Parteria save of $NAME from that copy"
 fi
 
 if master_up; then
@@ -173,7 +221,7 @@ SELECT (SELECT count(*) FROM rysteria.players WHERE uuid = :'uuid'),
 SQL
 )"
     [ "$left" = "0|0" ] || die "something is left after the wipe: $left"
-    echo "done: the Rysteria save and leaderboard rows of $NAME are gone (a copy is in public.wiped_rysteria)."
+    echo "done: the Parteria save and leaderboard rows of $NAME are gone (a copy is in public.wiped_rysteria)."
     echo "undo: scripts/accounts.sh restore $NAME"
 else
     pg -v "uuid=$UUID" <<'SQL'
@@ -188,5 +236,5 @@ ON CONFLICT (uuid) DO UPDATE SET xp = EXCLUDED.xp, checkpoint = EXCLUDED.checkpo
     updated_at = EXCLUDED.updated_at;
 COMMIT;
 SQL
-    echo "done: the Rysteria save of $NAME is back. Their leaderboard rows come back when they next join."
+    echo "done: the Parteria save of $NAME is back. Their leaderboard rows come back when they next join."
 fi

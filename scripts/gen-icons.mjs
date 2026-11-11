@@ -113,7 +113,7 @@ try {
         console.log("gen-icons: " + list.length + " icons in " + path.join(out, dir));
     }
 
-    // Rysteria: a column for every petal id, a row for every rarity
+    // Parteria: a column for every petal id, a row for every rarity
     let info = await open(base + "/?iconsheet", 5000, 1200);
     let tiles = [];
     for (let rarity = 0; rarity < info.rows; ++rarity)

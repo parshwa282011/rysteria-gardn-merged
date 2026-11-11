@@ -2,7 +2,7 @@
 
 Made by `scripts/gen-loot-tables.py` from the code. Run it again after changing a table.
 
-# Rysteria
+# Parteria
 
 ## Mob loot
 
@@ -38,6 +38,8 @@ Every mob has up to four loot entries, a petal and a number (the *seed*). When t
 | Ant Egg | Pellet (0.02) |
 | Baby Ant | Pellet (0.03) |
 | Snail | nothing: its reward comes from the snail run (below) |
+| Beetle | Shell (0.05), Mandible (0.05) |
+| Mantis | Peas (0.1), Mandible (0.05) |
 
 ## What each seed gives
 
@@ -165,7 +167,7 @@ Used by: **Egg** from Queen Ant
 
 ### Seed 0.05, petal's lowest rarity Common
 
-Used by: **Fossil** from Triceratops; **Pellet** from Dakotaraptor, Ant Hole; **Droplet** from Ornithomimus; **Mandible** from Ant, Ant Hole; **Stinger** from Honeybee; **Azalea** from Beehive, Beehive Core; **Sand** from House Centipede, Lanternfly
+Used by: **Fossil** from Triceratops; **Pellet** from Dakotaraptor, Ant Hole; **Droplet** from Ornithomimus; **Mandible** from Ant, Ant Hole, Beetle, Mantis; **Stinger** from Honeybee; **Azalea** from Beehive, Beehive Core; **Sand** from House Centipede, Lanternfly
 
 | Mob rarity | Nothing | Common | Unusual | Rare | Epic | Legendary | Mythic | Exotic | Ancient |
 |---|---|---|---|---|---|---|---|---|---|
@@ -195,7 +197,7 @@ Used by: **Egg** from T-Rex; **Gravel** from Ankylosaurus; **Beak** from Quetzal
 
 ### Seed 0.05, petal's lowest rarity Rare
 
-Used by: **Shell** from Pteranodon; **Web** from Pachycephalosaurus; **Uranium** from Meteor; **Crest** from Fighter Bee
+Used by: **Shell** from Pteranodon, Beetle; **Web** from Pachycephalosaurus; **Uranium** from Meteor; **Crest** from Fighter Bee
 
 | Mob rarity | Nothing | Common | Unusual | Rare | Epic | Legendary | Mythic | Exotic | Ancient |
 |---|---|---|---|---|---|---|---|---|---|
@@ -255,7 +257,7 @@ Used by: **Leaf** from Fern, Ant; **Mint** from Lanternfly; **Wax** from Queen B
 
 ### Seed 0.1, petal's lowest rarity Rare
 
-Used by: **Crest** from Dakotaraptor; **Berry** from Pachycephalosaurus, Bush; **Web** from Spider; **Peas** from House Centipede
+Used by: **Crest** from Dakotaraptor; **Berry** from Pachycephalosaurus, Bush; **Web** from Spider; **Peas** from House Centipede, Mantis
 
 | Mob rarity | Nothing | Common | Unusual | Rare | Epic | Legendary | Mythic | Exotic | Ancient |
 |---|---|---|---|---|---|---|---|---|---|

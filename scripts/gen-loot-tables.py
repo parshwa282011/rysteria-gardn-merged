@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Writes LOOT_TABLES.md: every loot table of Rysteria and gardn, worked out from the
+"""Writes LOOT_TABLES.md: every loot table of Parteria and gardn, worked out from the
 code (so run it again after changing a table or a coefficient):
 
     python3 scripts/gen-loot-tables.py > LOOT_TABLES.md
 
-Rysteria: the loot of every mob is read from rrolf/Shared/StaticData.c and the chance of
+Parteria: the loot of every mob is read from rrolf/Shared/StaticData.c and the chance of
 every result rarity is worked out with the same formula as Shared/Component/Mob.c.
 Gardn: a small program is compiled with clang++ against gardn/Shared/StaticData.cc and
 prints MOB_DROP_CHANCES."""
@@ -117,7 +117,7 @@ w("# Loot tables")
 w("")
 w("Made by `scripts/gen-loot-tables.py` from the code. Run it again after changing a table.")
 w("")
-w("# Rysteria")
+w("# Parteria")
 w("")
 w("## Mob loot")
 w("")

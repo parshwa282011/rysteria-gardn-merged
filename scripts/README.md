@@ -158,7 +158,7 @@ server too. Only webmail goes through the tunnel; the mail ports (25, 465, 587, 
 ## Petal icons for the stats pages
 
 `build.sh` (with the clients) runs `scripts/gen-icons.mjs` last: both clients have a hidden mode
-(`/?iconsheet` for Rysteria, `/gardn/?iconsheet` for gardn) in which the game draws every petal as its
+(`/?iconsheet` for Parteria, `/gardn/?iconsheet` for gardn) in which the game draws every petal as its
 loadout does instead of playing, and headless Chrome cuts each petal out as a png into
 `rrolf-client/icons/rysteria/<id>-<rarity>.png` and `rrolf-client/icons/gardn/<id>.png`. The pages
 `/status` and `/gardn/stats` show them. It needs Chrome on the machine that builds the clients (c1); without

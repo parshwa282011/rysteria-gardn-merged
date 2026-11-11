@@ -3,7 +3,7 @@
 
 The master only knows petal ids; the pages show names, so they carry a table of them:
   gardn-stats.html  gardn's petals and rarities (gardn/Shared/StaticData.cc)
-  stats.html        Rysteria's petal names (rrolf/Shared/StaticData.c), for the loadout
+  stats.html        Parteria's petal names (rrolf/Shared/StaticData.c), for the loadout
 Run this after a petal is added or renamed, then commit rrolf:
 
     scripts/gen-petal-table.py            # rewrites the tables
@@ -47,7 +47,7 @@ def rewrite(path, begin, end, table):
     _, tail = rest.split(end, 1)
     return page, head + table + tail
 
-# Rysteria's names, by petal id
+# Parteria's names, by petal id
 rr = open(RR_DATA).read()
 start = rr.index("RR_PETAL_NAMES[rr_petal_id_max] = {")
 rr_names = re.findall(r'"([^"]*)"', rr[start:rr.index("};", start)])

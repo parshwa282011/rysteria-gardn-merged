@@ -3,7 +3,7 @@
 Written 2026-11-08 from the code (`rrolf/MasterServer/c/db_postgres.c`, `db_mongo.c`, `leaderboard.c`, `tmpstore.c`,
 `dual-server-syncing/`) and read-only queries on c1. The row counts are from that day.
 
-There is **one database**, and only the master server talks to it. The game servers (Rysteria's four, gardn) and the
+There is **one database**, and only the master server talks to it. The game servers (Parteria's four, gardn) and the
 web pages never open a connection to it: they ask the master over HTTP (`X-Server-Secret` for the game servers, the
 login tokens for players).
 
@@ -37,6 +37,7 @@ schemas `accounts`, `rysteria`, `gardn` and `leaderboards` has a trigger `sync_c
 | `pw_hash` | text | the password hash (never the password) |
 | `token_key` | text | the key that signs this account's login tokens |
 | `is_dev` | boolean | a developer account |
+| `tag` | text | the tag of the player in Parteria: `Spider` (also gives the flower the legs of a spider), `Supporter`, or empty for none. Accounts made before it existed have no value there, which means none (the column can also be NULL on purpose: a standby copying a row from a master from before the tags fills it so). Set it with `scripts/accounts.sh tag <name> spider` |
 | `created_at`, `last_login_at` | bigint | Unix seconds |
 
 **`accounts.links`** (9 rows) the Discord/Google/Apple accounts linked to an account. Primary key `(uuid, provider)`,
@@ -45,7 +46,7 @@ Apple, whose token has to be revoked when the account is deleted). Deleted with 
 
 ### Schema `rysteria`
 
-**`rysteria.players`** (13 rows) a Rysteria player's progress. `uuid` (key, deletes with the account), `xp`,
+**`rysteria.players`** (13 rows) a Parteria player's progress. `uuid` (key, deletes with the account), `xp`,
 `checkpoint`, `pvp_points`, `petals` (jsonb: the inventory), `failed_crafts`, `mob_kills`, `loadout` (jsonb),
 `nickname`, `updated_at`.
 
@@ -66,16 +67,16 @@ that was sent. On every start of a primary master, and when the Pi takes over, t
 
 | Board | Game | Counts |
 |---|---|---|
-| `rr_level` | Rysteria | level |
-| `rr_pvp_kills`, `rr_pvp_best` | Rysteria | kills in the PvP zone, best score there |
-| `rr_ancient_attempts`, `rr_ancients`, `rr_ancient_kills` | Rysteria | tries to craft an Ancient, Ancients owned, Ancients killed |
-| `rr_kills` | Rysteria | mobs killed |
+| `rr_level` | Parteria | level |
+| `rr_pvp_kills`, `rr_pvp_best` | Parteria | kills in the PvP zone, best score there |
+| `rr_ancient_attempts`, `rr_ancients`, `rr_ancient_kills` | Parteria | tries to craft an Ancient, Ancients owned, Ancients killed |
+| `rr_kills` | Parteria | mobs killed |
 | `gardn_kills`, `gardn_best_score`, `gardn_mythics` | gardn | kills of players, best score of a save, mythic petals in saves |
-| `mg_ctf_wins`, `mg_tdm_wins`, `mg_has_wins` | Rysteria minigames | matches won (only when the host typed the PIN) |
+| `mg_ctf_wins`, `mg_tdm_wins`, `mg_has_wins` | Parteria minigames | matches won (only when the host typed the PIN) |
 | `mg_ctf_played`, `mg_tdm_played`, `mg_has_played` | hidden | matches played (the profile shows "won x, lost y") |
 
 Counts on 2026-11-08: `gardn_best_score` 7, `gardn_kills` 5, `gardn_mythics` 2, `rr_level` 13, `rr_kills` 11, the other
-Rysteria boards 1 to 3 each. Nothing from gardn's sandbox is ever written here.
+Parteria boards 1 to 3 each. Nothing from gardn's sandbox is ever written here.
 
 ### Schema `sync` (replication, not game data)
 
@@ -118,8 +119,8 @@ are dropped as they are found.
 
 | Key | Set by | What |
 |---|---|---|
-| `uuid`, `PL-P`, `PL-T` | the Rysteria login page | the account id and the login tokens, shared with gardn (also passed in the address when the Gardn button opens it) |
-| `rrolf_account_data`, `rrolf_cache_owner` | Rysteria | a cache of the account, and whose it is |
+| `uuid`, `PL-P`, `PL-T` | the Parteria login page | the account id and the login tokens, shared with gardn (also passed in the address when the Gardn button opens it) |
+| `rrolf_account_data`, `rrolf_cache_owner` | Parteria | a cache of the account, and whose it is |
 | `version_hash` | both | the version of the page that is loaded |
 | gardn: `nickname`, `settings`, `gamemode`, `petals`, `mobs`, `changelog`, `recovery_id` | gardn | the name, the options (mouse or keyboard movement and the others), the last mode (the sandbox is never kept), the petals and mobs seen, the changelog entries seen, the id used to come back to the same flower after a disconnect |
 

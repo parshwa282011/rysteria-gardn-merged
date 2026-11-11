@@ -4,7 +4,7 @@
 //                        everybody without a valid login here
 //   /account             link Discord/Google/Apple, add an email, delete the account (account.html)
 //   /privacy, /terms     privacy policy and terms of service (Google/Apple/store listings ask for URLs)
-//   /leaderboard         Rysteria leaderboards (leaderboard.html next to the client)
+//   /leaderboard         Parteria leaderboards (leaderboard.html next to the client)
 //   /stats?uuid=...      a player's stats, with a search for others (stats.html)
 //   /status              the stats of the player who is logged in (stats.html)
 //   /gardn/leaderboard   gardn leaderboards (the same leaderboard.html)

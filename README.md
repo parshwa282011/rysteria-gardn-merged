@@ -1,4 +1,4 @@
-# Rysteria + Gardn: putting it on your servers
+# Parteria + Gardn: putting it on your servers
 
 This is the full list of what you have to do, in order. Each step says what it
 does and what you should see when it worked. Nothing here asks you to edit code.
@@ -261,7 +261,7 @@ Logs: `builds/<os>-<arch>/run/<name>.log`.
 ## Pages, minigames, phone apps
 
 * `game.<domain>/leaderboard`, `/stats?uuid=...` (search other players), `/status` (your own page, shareable) are
-  Rysteria's; `/gardn/leaderboard` and `/gardn/stats` are gardn's. The master rate limits them (60 requests a minute per address).
+  Parteria's; `/gardn/leaderboard` and `/gardn/stats` are gardn's. The master rate limits them (60 requests a minute per address).
 * `rrolf-minigames` (`mini-game.<domain>`) runs capture the flag, team deathmatch and hide and seek, see
   `rrolf/tools/ctf/README.md`. Set `MINIGAMES_PIN` in `secrets/master.env`: a match started with that PIN counts for the
   accounts' wins.
@@ -294,6 +294,15 @@ PostgreSQL: `UPDATE accounts.accounts SET is_dev = true WHERE username_lower = '
 MongoDB: `db.accounts.updateOne({username_lower: "yourname"}, {$set: {is_dev: true}})`
 
 (Log out and back in, or reconnect, to pick it up.)
+
+A tag, the word shown beside a player in Parteria, is set the same way. `Spider` also gives the
+flower the legs of a spider (`Shared/Tags.h` lists the tags):
+
+`scripts/accounts.sh tag yourname spider` (`none` takes it away), or
+PostgreSQL: `UPDATE accounts.accounts SET tag = 'Spider' WHERE username_lower = 'yourname';`
+MongoDB: `db.accounts.updateOne({username_lower: "yourname"}, {$set: {tag: "Spider"}})`
+
+An account without a tag (all of them before this) has none. It shows when the player next joins a server.
 
 ## Windows
 
