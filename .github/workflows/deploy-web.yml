@@ -1,0 +1,50 @@
+name: Deploy website to Cloudflare
+
+# Builds the rrolf and gardn clients and the pages (scripts/build-web.sh) and puts them on the
+# Cloudflare Worker in cloudflare/. Needs two secrets in Settings > Secrets and variables > Actions:
+#   CLOUDFLARE_API_TOKEN   a token made from the template "Edit Cloudflare Workers"
+#   CLOUDFLARE_ACCOUNT_ID  the id in the dashboard address (dash.cloudflare.com/<this>/...)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "rrolf/**"
+      - "gardn/**"
+      - "cloudflare/**"
+      - "scripts/build-web.sh"
+      - "scripts/common/build-hash.sh"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive   # both repositories are public; a private one needs a token here
+          fetch-depth: 0          # build-hash.sh reads the commit time of gardn
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest         # pin the version you build with on your Mac if this ever fails
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the website
+        env:
+          # what the clients are built to talk to (the same as GARDN_WS_URL and CLIENT_API_URL in common.env)
+          CLIENT_API_URL: https://api-game.parshwa.blog/
+          GARDN_WS_URL: wss://game.parshwa.blog/gardn/
+        run: scripts/build-web.sh
+      - name: Deploy the Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: cloudflare
+          command: deploy

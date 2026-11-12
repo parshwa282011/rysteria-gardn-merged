@@ -35,9 +35,11 @@ run mkdir -p "$RS_TARGET" "$RS_WORK" "$RS_RUN"
 pdev_flag=(-UPDEV)
 run rm -f "$RS_TARGET/PDEV-BUILD"
 
-# one version per build: gardn clients and servers of different builds refuse
-# each other, so a stale browser tab reloads instead of misbehaving
-BUILD_HASH="$(date +%s)"
+# gardn clients and servers of different versions refuse each other, so a stale browser
+# tab reloads instead of misbehaving. The version is the commit time of gardn (every build of
+# the same commit is the same version, also the one the GitHub Action makes for the website),
+# or the time now when gardn has changes that are not committed: see build-hash.sh
+BUILD_HASH="$("$RS_COMMON_DIR/build-hash.sh" "$RS_ROOT")"
 
 has_kind() {
     local i

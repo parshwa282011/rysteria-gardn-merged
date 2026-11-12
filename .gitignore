@@ -19,3 +19,8 @@ phones/ios/build/
 *.jks
 *.keystore
 *.p8
+
+# the website the Cloudflare Worker serves (scripts/build-web.sh) and its build folders
+cloudflare/dist/
+cloudflare/.wrangler/
+.web-build/
