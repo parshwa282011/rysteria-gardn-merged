@@ -21,12 +21,15 @@
 # even the Pi) and the pages are not checked: the machines end up updated, built and
 # off, with the database still running.
 #
-# Usage: ./quick-deploy.sh [--dry-run] [--leave-off] [--allow-dirty] [--key FILE] [--no-push]
+# Usage: ./quick-deploy.sh [--dry-run] [--leave-off] [--allow-dirty] [--key FILE] [--no-push] [--skip NAME]...
 #   --dry-run      only print what would be done, change nothing
 #   --leave-off    update and build everything, but leave every server stopped
 #   --allow-dirty  deploy the commits even though files here are modified
 #   --key FILE     ssh key for the machines (default ~/.ssh/id_c1 if it exists)
 #   --no-push      do not push, but stop if something is not pushed yet
+#   --skip NAME    leave that machine of nodes.conf out (nothing is stopped, updated, built or
+#                  started there; it keeps running whatever it runs now). May be repeated. The first
+#                  machine that is left is the main one. Another way: a "-" as its ssh target in nodes.conf
 #
 # The machines, their ssh targets and folders come from secrets/nodes.conf
 # (name os lan ssh repo). DEPLOY_URLS (space separated) replaces the pages that
@@ -39,6 +42,7 @@ ALLOW_DIRTY=0
 PUSH=1
 OFF=0
 KEY=""
+SKIP=()
 [ -f "$HOME/.ssh/id_c1" ] && KEY="$HOME/.ssh/id_c1"
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -47,6 +51,7 @@ while [ $# -gt 0 ]; do
     --allow-dirty) ALLOW_DIRTY=1 ;;
     --no-push) PUSH=0 ;;
     --key) shift; KEY="${1:?--key needs a file}" ;;
+    --skip) shift; SKIP+=("${1:?--skip needs a machine name from nodes.conf}") ;;
     -h | --help) sed -n 2,/^set/p "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1 (see --help)" >&2; exit 2 ;;
     esac
@@ -68,6 +73,9 @@ N_NAME=(); N_OS=(); N_SSH=(); N_REPO=()
 while read -r name os _lan target repo _rest; do
     case "$name" in '' | '#'*) continue ;; esac
     [ "$target" = "-" ] && continue
+    skipped=0
+    for s in ${SKIP[@]+"${SKIP[@]}"}; do [ "$s" = "$name" ] && skipped=1; done
+    if [ "$skipped" = 1 ]; then echo "   leaving out $name (--skip)"; continue; fi
     case "$os" in macos | debian) ;; *) die "$name: os \"$os\" can not be deployed from here (macos or debian)" ;; esac
     N_NAME[$N]="$name"; N_OS[$N]="$os"; N_SSH[$N]="$target"; N_REPO[$N]="$repo"
     N=$((N + 1))
