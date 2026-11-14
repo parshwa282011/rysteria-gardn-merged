@@ -23,7 +23,8 @@ Usage:
   --dry-run    say what would be sent, send nothing
 
 Settings (environment, as in master.env): POSTGRES_URI, REMOTE_POSTGRES_URI, REMOTE_COPY_INTERVAL,
-REMOTE_COPY_STATE (the state file, default ./remote-copy-state.json).
+REMOTE_COPY_STATE (the state file). Looked up in the environment, then ./.env, then master.env / common.env of
+~/.rysteria-secrets (or SECRETS_DIR); the state file defaults to ~/.rysteria-secrets/remote-copy-state.json.
 """
 import argparse
 import fcntl
@@ -47,8 +48,8 @@ TABLES = [
 SCHEMAS = ["accounts", "rysteria", "gardn", "leaderboards"]
 
 
-def load_env(path=".env"):
-    """KEY=VALUE lines of run.sh's .env for this process (what is already in the environment wins)."""
+def _read_env_file(path, only=None):
+    """KEY=VALUE lines of a file for this process; what is already in the environment wins."""
     try:
         with open(path) as f:
             for line in f:
@@ -56,9 +57,23 @@ def load_env(path=".env"):
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 key, value = line.split("=", 1)
-                os.environ.setdefault(key.strip(), value.strip())
+                key = key.strip()
+                if only is None or key in only:
+                    os.environ.setdefault(key, value.strip())
     except OSError:
         pass
+
+
+def load_env():
+    """Settings: the environment first, then the .env next to this script's working folder (what run.sh's build
+    writes), then the secrets folder (SECRETS_DIR, default ~/.rysteria-secrets): so the script also works when
+    started by hand from anywhere."""
+    _read_env_file(".env")
+    secrets = os.environ.get("SECRETS_DIR") or os.path.expanduser("~/.rysteria-secrets")
+    _read_env_file(os.path.join(secrets, "master.env"), {"POSTGRES_URI", "REMOTE_POSTGRES_URI"})
+    _read_env_file(os.path.join(secrets, "common.env"), {"REMOTE_COPY_INTERVAL"})
+    # one state file for every way of starting it (run.sh, by hand), so a --pull is remembered by the loop
+    os.environ.setdefault("REMOTE_COPY_STATE", os.path.join(secrets, "remote-copy-state.json"))
 
 
 def log(msg):
@@ -275,7 +290,11 @@ def main():
     local_uri = os.environ.get("POSTGRES_URI", "")
     remote_uri = os.environ.get("REMOTE_POSTGRES_URI", "")
     if not local_uri or not remote_uri:
-        print("POSTGRES_URI and REMOTE_POSTGRES_URI must be set", file=sys.stderr)
+        secrets = os.environ.get("SECRETS_DIR") or os.path.expanduser("~/.rysteria-secrets")
+        print("POSTGRES_URI and REMOTE_POSTGRES_URI must be set: in the environment, in ./.env, or in "
+              f"{secrets}/master.env. Missing: " +
+              ", ".join(k for k, v in (("POSTGRES_URI", local_uri), ("REMOTE_POSTGRES_URI", remote_uri)) if not v),
+              file=sys.stderr)
         return 2
     if local_uri == remote_uri:
         print("POSTGRES_URI and REMOTE_POSTGRES_URI are the same database", file=sys.stderr)

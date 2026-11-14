@@ -524,7 +524,7 @@ compose_env() {
                 echo "POSTGRES_URI=$(env_get "$RS_SECRETS_DIR/master.env" POSTGRES_URI)"
                 echo "REMOTE_POSTGRES_URI=$(env_get "$RS_SECRETS_DIR/master.env" REMOTE_POSTGRES_URI)"
                 echo "REMOTE_COPY_INTERVAL=$(common_get REMOTE_COPY_INTERVAL 1800)"
-                echo "REMOTE_COPY_STATE=$RS_RUN/remote-copy-state.json"
+                echo "REMOTE_COPY_STATE=$RS_SECRETS_DIR/remote-copy-state.json"
             } >"$env_file"
             ;;
         rrolf)
