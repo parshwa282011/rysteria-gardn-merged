@@ -1,7 +1,5 @@
 builds/
 secrets/
-dual-server-syncing/node_modules/
-dual-server-syncing/nodes.conf
 backup/
 
 # phone apps: generated, signing material and settings

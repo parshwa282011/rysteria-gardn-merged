@@ -4,8 +4,7 @@
 #
 #   1. checks that nothing is uncommitted and pushes the commits (rrolf and gardn
 #      first, then this repository, which points at them)
-#   2. stops the backup machines (the Pi), so that their syncd can not take over
-#      while the main one is restarted
+#   2. stops the other machines (the Pi): only the first machine serves the game
 #   3. on every machine: git fetch, reset --hard to origin/main (what was changed
 #      there by hand is saved to ~/deploy-discarded-*.patch first) and the
 #      submodules to the commits this repository points at
@@ -13,12 +12,12 @@
 #      builds everything (it has emscripten), the others with --skip-clients
 #   5. refuses to go on if a build has PDEV in it (the give-petals cheat)
 #   6. restarts the first machine (c1)
-#   7. copies its web clients and gardn to the others (scripts/sync-clients.sh)
-#      and starts them, one after another (the Pi)
+#   7. copies its web clients and gardn to the others (scripts/sync-clients.sh); they stay
+#      stopped, as spares
 #   8. checks the public pages and that every machine runs the same commit
 #
-# With --leave-off the main machine is stopped as well, nothing is started again (not
-# even the Pi) and the pages are not checked: the machines end up updated, built and
+# With --leave-off the main machine is stopped as well, nothing is started again and the
+# pages are not checked: the machines end up updated, built and
 # off, with the database still running.
 #
 # Usage: ./quick-deploy.sh [--dry-run] [--leave-off] [--allow-dirty] [--key FILE] [--no-push] [--skip NAME]...
@@ -66,7 +65,6 @@ SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30)
 
 # ------------------------------------------------------------------- machines
 NODES="$ROOT/secrets/nodes.conf"
-[ -f "$NODES" ] || NODES="$ROOT/dual-server-syncing/nodes.conf"
 [ -f "$NODES" ] || die "no secrets/nodes.conf"
 N=0
 N_NAME=(); N_OS=(); N_SSH=(); N_REPO=()
@@ -134,7 +132,7 @@ echo "   deploying $(git log --oneline -1)"
 echo "   machines: $(for ((i = 0; i < N; i++)); do printf '%s ' "${N_NAME[$i]}"; done)(first = main one)"
 
 # ----------------------------------------------------- 2. stop the backup machines
-say "2. stopping the backup machines, so that none takes over"
+say "2. stopping the other machines (only the first one serves the game and holds the database that is copied online)"
 for ((i = 1; i < N; i++)); do
     act "$i" "stop" <<'EOF'
 cd "$REPO" && scripts/$OSDIR/stop.sh 2>&1 | tail -3 || true
@@ -176,7 +174,7 @@ for ((i = 0; i < N; i++)); do
     wait "${pids[$i]}" || rc=1
     cat "${TMPDIR:-/tmp}/quick-deploy-update-$i.log"
 done
-[ "$rc" = 0 ] || die "updating failed (the backups are stopped: scripts/<os>/run.sh on them starts them again)"
+[ "$rc" = 0 ] || die "updating failed (the other machines are stopped: scripts/<os>/run.sh on them starts them again)"
 
 # ---------------------------------------------------------------- 4. build
 say "4. building (the first machine everything, the others without the web clients)"
@@ -236,8 +234,10 @@ else
 fi
 
 # ---------------------------------------------------------------- 7. the others
+# They are spares: updated and built, but left stopped. Two machines serving at once would be two
+# separate worlds, and only the first machine's database is copied to the online one
 for ((i = 1; i < N; i++)); do
-    say "7. ${N_NAME[$i]}: web clients and gardn from ${N_NAME[0]}$([ "$OFF" = 1 ] || echo ", then start")"
+    say "7. ${N_NAME[$i]}: web clients and gardn from ${N_NAME[0]}, left stopped"
     if [ "$DRY" = 0 ] && rsh "$i" 'test -f ~/.rysteria-secrets/split.env' 2>/dev/null; then
         echo "   split mode on ${N_NAME[$i]}: it serves no web clients, nothing to copy"
     elif [ "$DRY" = 1 ]; then
@@ -245,18 +245,12 @@ for ((i = 1; i < N; i++)); do
     else
         "$ROOT/scripts/sync-clients.sh" "${N_NAME[0]}" "${N_NAME[$i]}" ${KEY:+"$KEY"} 2>&1 | tail -3
     fi
-    if [ "$OFF" = 0 ]; then
-        act "$i" "run" <<'EOF'
-cd "$REPO"
-scripts/$OSDIR/run.sh 2>&1 | tail -4
-EOF
-    fi
 done
 
 # ---------------------------------------------------------------- 8. check
 say "8. checking"
 if [ "$DRY" = 1 ]; then
-    echo "   [dry run] would check the pages, sync status and that every machine runs $WANT"
+    echo "   [dry run] would check the pages and that every machine runs $WANT"
     exit 0
 fi
 [ "$OFF" = 1 ] || sleep 15
@@ -272,10 +266,6 @@ for u in $URLS; do
     echo "   $code $u"
     [ "$code" = 200 ] || bad=1
 done
-if [ "$OFF" = 0 ]; then
-    echo
-    rsh 0 "bash -l -c \"cd '${N_REPO[0]}' && scripts/${N_OS[0]}/sync.sh status 2>&1 | tail -8\"" || true
-fi
 [ "$bad" = 0 ] || die "something above is not right"
 if [ "$OFF" = 1 ]; then
     say "done: updated and built, every server is off. Start them with scripts/<os>/run.sh (c1 first), or ./quick-deploy.sh"

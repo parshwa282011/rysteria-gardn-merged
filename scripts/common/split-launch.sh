@@ -26,7 +26,6 @@ split_launch() { # <mac|pi> <script's arguments...>
     done
 
     local nodes="$ROOT/secrets/nodes.conf"
-    [ -f "$nodes" ] || nodes="$ROOT/dual-server-syncing/nodes.conf"
     [ -f "$nodes" ] || { echo "error: no secrets/nodes.conf" >&2; return 1; }
     # name os lan ssh repo, best first: line 1 = mac side, line 2 = pi side
     local lines n1 n2

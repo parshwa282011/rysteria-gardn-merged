@@ -66,7 +66,7 @@ SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
 [ -n "$KEY" ] && SSH_OPTS+=(-i "$KEY" -o IdentitiesOnly=yes)
 TARGET=""
 if [ -z "$URI" ]; then
-    nodes="$ROOT/secrets/nodes.conf"; [ -f "$nodes" ] || nodes="$ROOT/dual-server-syncing/nodes.conf"
+    nodes="$ROOT/secrets/nodes.conf"
     [ -f "$nodes" ] || die "no secrets/nodes.conf"
     TARGET="$(awk -v n="$NODE" '$1 !~ /^#/ && NF >= 5 && $4 != "-" && (n == "" || $1 == n) { print $4; exit }' "$nodes")"
     [ -n "$TARGET" ] || die "no machine${NODE:+ called $NODE} with an ssh target in $nodes"

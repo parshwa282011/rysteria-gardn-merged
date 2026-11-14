@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Split mode, the other machine (the Pi, line 2 of secrets/nodes.conf): it runs rrolf-hc
-# (hell creek) and rrolf-pvp, which connect to the master of the main machine over the LAN,
-# and syncd in clone mode, which keeps its PostgreSQL a copy of the master's database. No
-# master, no tunnel, and it never takes over by itself: the tunnel of the main machine
-# sends the players to it (see ./split-mac.sh).
+# (hell creek) and rrolf-pvp, which connect to the master of the main machine over the LAN.
+# No master, no database, no tunnel: the tunnel of the main machine sends the players to it
+# (see ./split-mac.sh).
 #
 # Run from your own computer; it works on the machines over ssh (--local: on this machine).
 # Order the first time: ./split-pi.sh, then ./split-mac.sh. Back to normal:

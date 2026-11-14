@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Starts everything that build.sh produced, detached, in this order:
 #   master (waits for /health) -> rrolf game servers -> gardn -> edge
-#   -> syncd, only if SYNC_ENABLED=1 in ~/.rysteria-secrets/sync.env
+#   -> remote-copy.py, only on the machine named by REMOTE_COPY_NODE in common.env
 #   -> cloudflared, only if CLOUDFLARED_ENABLED=1 in ~/.rysteria-secrets/common.env
-#      (with SYNC_ENABLED=1 only on the primary machine, see dual-server-syncing/)
 # Each process runs in its own builds/<os>-<arch>/<name>/ folder and reads the
 # .env sitting there. Logs and pid files: builds/<os>-<arch>/run/
 #
@@ -61,14 +60,11 @@ wait_for_master() {
     die "master did not become healthy, see $RS_RUN/master.log"
 }
 
-ROLE_FILE="$RS_RUN/sync.role"
-
-# With SYNC_ENABLED=1 only the primary gets the tunnel. syncd decides who that is
-# and records it in $ROLE_FILE (it calls this script again after taking over).
+# Is this the machine that has the tunnel? (always, except in split mode on the machine without the master)
 is_primary_here() {
     # split mode: the machine with the master always has the tunnel, the other never
     case "$(split_role)" in mac) return 0 ;; pi) return 1 ;; esac
-    ! sync_enabled || [ "$(cat "$ROLE_FILE" 2>/dev/null)" = primary ]
+    return 0
 }
 
 # a server of the other machine: connections to its port here are passed on to it
@@ -95,7 +91,7 @@ start_forwarder() { # <name> <port>
     is_running "$fwd" || die "$fwd exited right away, see $RS_RUN/$fwd.log"
 }
 
-for kind in master rrolf gardn edge sync; do
+for kind in master rrolf gardn edge copier; do
     for ((i = 0; i < ${#SV_NAME[@]}; i++)); do
         [ "${SV_KIND[$i]}" = "$kind" ] || continue
         name="${SV_NAME[$i]}"
@@ -109,16 +105,10 @@ for kind in master rrolf gardn edge sync; do
         rrolf) start "$name" ./rrolf-server ;;
         gardn) start "$name" node gardn-server.js ;;
         edge) start "$name" node edge.js ;;
-        sync)
-            sync_enabled || continue
-            # a role left over from before a reboot or crash must not start the
-            # tunnel, except after stop.sh --keep-role (a restart of the primary)
-            if [ -e "$RS_RUN/sync.keep-role" ]; then
-                run rm -f "$RS_RUN/sync.keep-role"
-            else
-                is_running "$name" || run rm -f "$ROLE_FILE"
-            fi
-            start "$name" node syncd.js
+        copier)
+            # the database of this machine is copied to the online one every 30 minutes (remote-copy.py)
+            copier_enabled || continue
+            start "$name" python3 remote-copy.py --loop
             ;;
         esac
     done
@@ -138,8 +128,6 @@ fi
 # ----------------------------------------------------------------- cloudflared
 if [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ] && [ "$(split_role)" = pi ]; then
     log "split mode: no tunnel on this machine, the other machine has it and passes the connections on"
-elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ] && ! is_primary_here; then
-    log "backup mode: no tunnel on this machine (syncd starts it if the primary fails). state: scripts/$RS_OS/sync.sh status"
 elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     need cloudflared
     domain="$(common_get DOMAIN)"
@@ -193,7 +181,7 @@ elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
         if [ "$tunnel_up" = 1 ]; then
             log "cloudflared is connected"
         else
-            warn "cloudflared could not connect: the game runs here but not through the tunnel. syncd (or run.sh again) tries again"
+            warn "cloudflared could not connect: the game runs here but not through the tunnel. run.sh again tries again"
         fi
     fi
 fi

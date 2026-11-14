@@ -15,8 +15,6 @@ stop.sh          stop them (players and saves are flushed first)
 restart-one.sh   start one game server again (the master runs it when a server drops, once)
 clean-builds.sh  delete builds/ (only that) so the next build starts clean
 up.sh            setup + build + run
-sync.sh          backup / failover between machines: init | status | promote
-                 (see ../dual-server-syncing/README.md)
 mail.sh          the mail server (the "email system/" folder was removed for now, it is in the git history before the commit "Remove the mail server folder"; the script stops with an error until it is back)
 ```
 Every script takes `--dry-run` (print, don't do). `bootstrap.sh` / `windows\bootstrap.ps1`
@@ -93,13 +91,13 @@ failover, `ssh.parshwa.blog` leads to whichever machine has the tunnel.
 
 ### Split mode: the game on two machines
 
-Normally the Mac runs the whole game and the Pi is a backup that takes over if it dies. `./split-pi.sh` and
+Normally the Mac runs the whole game and the Pi is a spare that is started by hand. `./split-pi.sh` and
 `./split-mac.sh` (from your computer, over ssh) divide the game instead:
 
 | machine | runs |
 |---|---|
 | Mac (line 1 of `nodes.conf`) | PostgreSQL, the master, gardn, the web edge, rrolf-garden, rrolf-minigames, and the **one** cloudflared tunnel for every hostname |
-| Pi (line 2) | rrolf-hc (hell creek) and rrolf-pvp, which talk to the master over the LAN, and `syncd` in **clone mode**, which keeps its PostgreSQL a copy of the master's database |
+| Pi (line 2) | rrolf-hc (hell creek) and rrolf-pvp, which talk to the master over the LAN. No master, no database |
 
 The tunnel's routes do not change: `hc-game` and `pvp-game` still point at `127.0.0.1:1234` / `:1235` on the Mac, where
 `scripts/common/forward.js` passes every connection on to the Pi (plain TCP, so websockets just work). The Pi never
@@ -138,11 +136,33 @@ The master restarts a game server that drops its connection without saying it wa
 once; `stop.sh` and a plain `kill` (SIGTERM) are "on purpose" and are left alone. `RESTART_DROPPED_SERVERS=0` in
 `common.env` turns it off. See `rrolf/MasterServer/c/README.md`.
 
-## Backup servers
+## The database: local, and copied online every 30 minutes
 
-With `SYNC_ENABLED=1` in `sync.env`, `run.sh` also starts `syncd` and only the primary machine
-gets the cloudflared tunnel; the others run the full stack as copies and take over when the
-primary fails. Setup and rules: `dual-server-syncing/README.md`.
+The master works on the PostgreSQL of its own machine (`POSTGRES_URI` in `master.env`): as many requests as it
+likes, they cost nothing. A free online database (Prisma Postgres, Neon, ...) counts every request, so the master
+never talks to it. `scripts/common/remote-copy.py` does, every `REMOTE_COPY_INTERVAL` seconds (default 1800):
+
+* it fingerprints each of the six tables locally and sends only the tables that changed, all in **one request**
+  (one statement per table: new and changed rows are upserted, rows that are gone are deleted). A cycle in which
+  nothing changed asks the online database nothing;
+* it runs only on the machine named by `REMOTE_COPY_NODE` in `common.env` (`c1`), and only when `master.env` has a
+  `REMOTE_POSTGRES_URI`. `run.sh` starts it (kind `copier` in `servers.conf`), `stop.sh` stops it. A spare machine
+  with an old database can not overwrite the online one;
+* it refuses to copy when the local database has no accounts, or when the online one holds data this machine never
+  saw (the first run): start from the online data with `--pull`, or `--force`.
+
+```sh
+python3 scripts/common/remote-copy.py --pull    # replace the local database with the online one (once, to start)
+python3 scripts/common/remote-copy.py --once    # copy now        (--dry-run: only say what would be sent)
+python3 scripts/common/remote-copy.py --status  # when it last copied
+```
+Needs `POSTGRES_URI` and `REMOTE_POSTGRES_URI` in the environment (or the `.env` next to it, which `build.sh`
+writes), `psql` and `pg_dump`. Roughly: 48 copies a day, at most one request each, so under 50 requests a day
+against the online database, however many players there are or however often the leaderboard is read.
+
+Inside the master the players who are online are kept in memory and saved together: every
+`FLUSH_INTERVAL_MS` (5 seconds) ONE request writes all the players that changed, and one more their leaderboard
+numbers. A player who leaves is saved at once.
 
 ## Mail server
 
@@ -164,26 +184,3 @@ loadout does instead of playing, and headless Chrome cuts each petal out as a pn
 `/status` and `/gardn/stats` show them. It needs Chrome on the machine that builds the clients (c1); without
 it the build says so and the pages show plain coloured tiles. The Pi gets the icons with the clients
 (`scripts/sync-clients.sh`).
-
-## Comparing the databases of c1 and the Pi
-
-`python3 scripts/compare-db.py` (read-only, from your computer over ssh) hashes every row of every table of the
-four schemas on both machines and says, per table, how many rows each has, which are only on one side and which
-are on both but not the same. `--detail` names the columns that differ and shows their values (the password
-hash, the token key and the provider token only say "differs"). The Pi copies c1 every few seconds, so a row
-that changed a moment ago can show up: run it again. Exit code 0 = the same, 1 = different, 2 = could not ask.
-
-## Making the two databases the same
-
-`python3 scripts/reconcile-db.py` asks about every row that is not the same on c1 and the Pi: the table, the
-key, whose account it is (username, when it was made, last login, the email only as yes / no), which columns
-differ and what they hold on each side (the secret columns only say "differs"). Per row you answer: keep c1's
-version, keep the Pi's, or (for a row that is only on one side) copy it over or delete it, skip, or stop;
-`1!` / `2!` / `c!` / `d!` answer for everything that is left. It ends with the plan. Nothing is changed unless you
-add `--apply` and type `yes`: then it makes a `pg_dump` on each machine it writes to
-(`~/rysteria-before-reconcile-<time>.dump`, restore with `pg_restore --clean`), checks that every row is still the
-way you saw it (a row that moved meanwhile is skipped and listed), and changes each machine in one transaction.
-A change to c1 (the primary) is copied to the Pi by syncd; a change to the Pi is made quietly so that it is not
-copied back. Deleting an account deletes its saves, links, player and leaderboard rows with it.
-c1 is live: a row that changed a few seconds ago is only on its way to the Pi, so it says so on the card.
-

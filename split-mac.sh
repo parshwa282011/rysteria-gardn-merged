@@ -3,7 +3,6 @@
 # PostgreSQL database, gardn, the web edge, rrolf-garden and rrolf-minigames and the whole
 # cloudflared tunnel. Hell creek (rrolf-hc) and pvp (rrolf-pvp) move to the other machine
 # (the Pi): their ports here become forwarders to it, so the tunnel's routes do not change.
-# The other machine keeps a copy of the database (syncd in clone mode).
 #
 # Run from your own computer; it works on the machines over ssh (--local: on this machine).
 # Order the first time: ./split-pi.sh, then ./split-mac.sh (this starts the Pi's servers

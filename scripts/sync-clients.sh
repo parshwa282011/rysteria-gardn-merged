@@ -17,7 +17,6 @@ from="${1:?usage: sync-clients.sh <from node> <to node> [ssh-key]}"
 to="${2:?usage: sync-clients.sh <from node> <to node> [ssh-key]}"
 key="${3:-}"
 nodes="$here/secrets/nodes.conf"
-[ -f "$nodes" ] || nodes="$here/dual-server-syncing/nodes.conf"
 
 node_field() { # <node> <column 1-5>
     awk -v n="$1" -v c="$2" '$1 !~ /^#/ && $1 == n { print $c; exit }' "$nodes"

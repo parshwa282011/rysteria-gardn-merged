@@ -9,15 +9,14 @@
 #       other machine (1234 and 1235) are forwarders (forward.js) to that machine, so the
 #       tunnel keeps the routes it has: nothing in its configuration changes.
 #   the "pi" machine
-#       rrolf-hc (hell creek) and rrolf-pvp, which talk to the master over the LAN, and
-#       syncd in clone mode, which keeps this machine's PostgreSQL a copy of the master's
-#       database. No tunnel, no master, never takes over by itself.
+#       rrolf-hc (hell creek) and rrolf-pvp, which talk to the master over the LAN.
+#       No tunnel, no master, no database.
 #
 # Usage: scripts/common/split.sh <command> [options]
 #   mac       make this machine the "mac" side   --pi-addr IP  --pi-ssh user@host  --pi-repo DIR
 #                                                [--pi-os debian] [--key FILE] [--remote a,b]
 #   pi        make this machine the "pi" side    --mac-addr IP
-#   off       back to the normal full stack on this machine (failover with syncd as before)
+#   off       back to the normal full stack on this machine (the full stack)
 #   status    what runs here and whether the other side answers
 #   tunnel-check   read-only look at cloudflared here: credentials, clock, network, who is connected
 # Options for mac / pi / off:
@@ -131,18 +130,14 @@ mac)
     [ -n "$PI_SSH" ] && [ -n "$PI_REPO" ] || die "mac needs --pi-ssh user@host and --pi-repo <folder> (to restart its servers and start them)"
     ssh_opts
     ensure_postgres
-    if [ "$(sync_get SYNC_LAN_HEALTH)" = 0 ]; then
-        warn "SYNC_LAN_HEALTH=0 in sync.env: the master would only listen on this machine, but the other machine's servers connect over the LAN. Split mode makes it listen on the LAN anyway"
-    fi
     if [ "$RS_DRY_RUN" != 1 ]; then
         ssh -n "${SSH_OPTS[@]}" "$PI_SSH" "test -x '$PI_REPO/scripts/common/split.sh'" ||
             die "cannot reach $PI_SSH over ssh with a key, or $PI_REPO there has no scripts/common/split.sh (commit, push and update it first: ./quick-deploy.sh)"
     fi
-    # what runs here: everything in servers.conf except what the other machine runs and syncd
+    # what runs here: everything in servers.conf except what the other machine runs
     run_list=""
     for name in $(all_names); do
         list_has "$REMOTE" "$name" && continue
-        [ "$name" = syncd ] && continue
         run_list="$run_list,$name"
     done
     run_list="${run_list#,}"
@@ -172,29 +167,22 @@ EOF
 pi)
     if [ -z "$MAC_ADDR" ]; then
         # the lan column of the first line of nodes.conf is the main machine
-        nodes="$RS_SECRETS_DIR/nodes.conf"; [ -f "$nodes" ] || nodes="$RS_ROOT/dual-server-syncing/nodes.conf"
+        nodes="$RS_SECRETS_DIR/nodes.conf"
         MAC_ADDR="$(awk '$1 !~ /^#/ && NF >= 5 { sub(/:.*/, "", $3); print $3; exit }' "$nodes" 2>/dev/null || true)"
         case "$MAC_ADDR" in '' | '-') MAC_ADDR="" ;; esac
     fi
     [ -n "$MAC_ADDR" ] || die "pi needs --mac-addr (the LAN address of the machine with the master)"
-    ensure_postgres
     if h="$(master_health "$MAC_ADDR")"; then
         log "the master at $MAC_ADDR answers: $h"
     else
         warn "the master at $MAC_ADDR:$(master_port) does not answer yet. The servers here keep trying; run split.sh mac on the other machine"
     fi
-    uri="$(master_uri)"
-    if command -v psql >/dev/null 2>&1 && [ -n "$uri" ]; then
-        triggers="$(psql "$uri" -Atc "select count(*) from pg_trigger where tgname = 'sync_capture'" 2>/dev/null || echo 0)"
-        [ "${triggers:-0}" -gt 0 ] ||
-            warn "this database has none of the master's tables yet, so the copy can not be applied. Run the master here once (scripts/$RS_OS/run.sh in normal mode) before switching to split mode"
-    fi
     stop_here
-    # what runs here is what the other side forwards (--remote, hell creek and pvp), plus the
-    # database copy. The master is built (it knows the database's tables) but not started
+    # what runs here is what the other side forwards (--remote, hell creek and pvp). The master is
+    # built (the game servers come with it) but not started
     write_split <<EOF
 SPLIT_ROLE=pi
-SPLIT_RUN=$REMOTE,syncd
+SPLIT_RUN=$REMOTE
 SPLIT_BUILD_ONLY=master
 SPLIT_REMOTE=
 SPLIT_MASTER_ADDR=$MAC_ADDR
@@ -233,7 +221,6 @@ status)
     done
     if [ "$role" = pi ]; then
         if h="$(master_health "$(master_addr)")"; then echo "master at $(master_addr): $h"; else echo "master at $(master_addr): does NOT answer"; fi
-        echo "database copy (syncd):"; tail -n 3 "$RS_RUN/syncd.log" 2>/dev/null | cut -c1-200 | sed 's/^/   /'
     elif [ -n "$role" ] || curl -fsS -m 3 "http://127.0.0.1:$(master_port)/health" >/dev/null 2>&1; then
         if h="$(master_health 127.0.0.1)"; then echo "master here: $h"; else echo "master here: does NOT answer"; fi
         if [ "$role" = mac ]; then

@@ -299,24 +299,6 @@ CLIENT_API_URL=https://api-game.$domain/
 GARDN_WS_URL=wss://game.$domain/gardn/
 EOF
 
-    # dual-server-syncing: copy this file unchanged to every machine
-    write_if_missing "$RS_SECRETS_DIR/sync.env" <<EOF
-# Backup / failover between machines (see dual-server-syncing/README.md).
-# 1 = this machine takes part: run.sh starts syncd, and only the primary gets the tunnel.
-SYNC_ENABLED=0
-# the password a backup sends to the primary's /backup. Same value on every machine.
-CLONE_SECRET=$(random_secret)
-# seconds between checks (default 30) / failed 5-second probes before a node counts as down (3)
-# SYNC_INTERVAL=30
-# SYNC_FAIL_PROBES=3
-# extra seconds a node waits for each better node before taking over (45)
-# SYNC_STAGGER=45
-# a backup whose last sync is older than this many seconds never takes over by itself (900)
-# SYNC_MAX_STALE=900
-# 1 = the master listens on the LAN so the other machines can check its /health
-SYNC_LAN_HEALTH=1
-EOF
-
     local master_example="$RS_ROOT/rrolf/MasterServer/c/.env.example"
     if [ ! -f "$RS_SECRETS_DIR/master.env" ] && [ "$RS_DRY_RUN" != 1 ]; then
         log "creating template $RS_SECRETS_DIR/master.env (secrets generated)"
@@ -484,18 +466,25 @@ wait_for_clock() {
     done
     warn "the clock is still not synchronised: cloudflared may be refused until it is"
 }
-sync_get() { env_get "$RS_SECRETS_DIR/sync.env" "$1"; }
-sync_enabled() { [ "$(sync_get SYNC_ENABLED)" = 1 ]; }
-
-# This machine's name in dual-server-syncing/nodes.conf: $SYNC_NODE, else the
-# first line of ~/.rysteria-secrets/sync-node, else the short host name.
-sync_node_name() {
-    local name="${SYNC_NODE:-}"
-    if [ -z "$name" ] && [ -f "$RS_SECRETS_DIR/sync-node" ]; then
-        name="$(head -n1 "$RS_SECRETS_DIR/sync-node")"
-    fi
+# This machine's name: $RS_NODE, else the first line of ~/.rysteria-secrets/node-name (or sync-node, as
+# it used to be called), else the short host name. REMOTE_COPY_NODE in common.env is compared with it.
+node_name() {
+    local name="${RS_NODE:-}" f
+    for f in node-name sync-node; do
+        if [ -z "$name" ] && [ -f "$RS_SECRETS_DIR/$f" ]; then
+            name="$(head -n1 "$RS_SECRETS_DIR/$f")"
+        fi
+    done
     [ -n "$name" ] || name="$(hostname -s 2>/dev/null || hostname)"
     printf '%s' "$name" | tr 'A-Z' 'a-z' | tr -d '[:space:]'
+}
+
+# The database copier (remote-copy.py) runs on ONE machine: the one named by REMOTE_COPY_NODE in common.env, and
+# only when master.env has a REMOTE_POSTGRES_URI. A machine that is not it never copies, so a spare machine with
+# an old database can not overwrite the online one.
+copier_enabled() {
+    [ -n "$(env_get "$RS_SECRETS_DIR/master.env" REMOTE_POSTGRES_URI)" ] || return 1
+    [ "$(common_get REMOTE_COPY_NODE | tr 'A-Z' 'a-z')" = "$(node_name)" ]
 }
 mail_get() { env_get "$RS_SECRETS_DIR/mail.env" "$1"; }
 mail_enabled() { [ "$(common_get MAIL_ENABLED)" = 1 ]; }
@@ -515,11 +504,6 @@ compose_env() {
         case "$kind" in
         master)
             cat "$RS_SECRETS_DIR/master.env" >"$env_file"
-            # the master names itself in /health and serves /backup to the backups
-            env_set "$env_file" NODE_NAME "$(sync_node_name)"
-            # a standby (syncd's state file says wasPrimary: false) keeps the primary's
-            # crash backups for a takeover instead of turning them into saves when it starts
-            sync_enabled && env_set "$env_file" SYNC_STATE_FILE "$RS_SECRETS_DIR/sync-state.json"
             # a game server that drops its connection without saying it is
             # stopping is started again, once (restart-one.sh). Off with
             # RESTART_DROPPED_SERVERS=0 in common.env
@@ -528,42 +512,19 @@ compose_env() {
             else
                 env_set "$env_file" RESTART_COMMAND "\"$RS_COMMON_DIR/restart-one.sh\" {name}"
             fi
-            if sync_enabled; then
-                env_set "$env_file" CLONE_SECRET "$(sync_get CLONE_SECRET)"
-                # the other machines check this one's /health over the LAN
-                [ "$(sync_get SYNC_LAN_HEALTH)" = 0 ] || env_set "$env_file" BIND_ADDRESS ""
-            fi
-            # split mode: the other machine's game servers and its database copy
-            # reach this master over the LAN
+            # split mode: the other machine's game servers reach this master over the LAN
             if [ "$(split_role)" = mac ]; then
                 env_set "$env_file" BIND_ADDRESS ""
-                [ -z "$(sync_get CLONE_SECRET)" ] || env_set "$env_file" CLONE_SECRET "$(sync_get CLONE_SECRET)"
             fi
+            # the online database is the copier's, not the master's
+            env_set "$env_file" REMOTE_POSTGRES_URI ""
             ;;
-        sync)
+        copier)
             {
-                cat "$RS_SECRETS_DIR/sync.env" 2>/dev/null || true
-                echo "NODE_NAME=$(sync_node_name)"
-                # on a takeover it asks the local master to turn the crash backups into saves
-                echo "SERVER_SECRET=$(env_get "$RS_SECRETS_DIR/master.env" SERVER_SECRET)"
-                echo "DB_TYPE=$(env_get "$RS_SECRETS_DIR/master.env" DB_TYPE)"
                 echo "POSTGRES_URI=$(env_get "$RS_SECRETS_DIR/master.env" POSTGRES_URI)"
-                echo "DOMAIN=$(common_get DOMAIN)"
-                echo "MASTER_PORT=$(common_get MASTER_PORT)"
-                echo "CLOUDFLARED_ENABLED=$(common_get CLOUDFLARED_ENABLED)"
-                echo "RS_ROOT=$RS_ROOT"
-                echo "RS_RUN=$RS_RUN"
-                echo "RS_OS=$RS_OS"
-                # the machine list travels with the secrets; the repo copy is the fallback
-                local nodes="$RS_SECRETS_DIR/nodes.conf"
-                [ -f "$nodes" ] || nodes="$RS_ROOT/dual-server-syncing/nodes.conf"
-                echo "SYNC_NODES_FILE=$nodes"
-                echo "SYNC_STATE_FILE=$RS_SECRETS_DIR/sync-state.json"
-                # split mode, the machine without the master: only copy its database
-                if [ "$(split_role)" = pi ]; then
-                    echo "SYNC_MODE=clone"
-                    echo "SYNC_PRIMARY_URL=http://$(master_addr):$(common_get MASTER_PORT)"
-                fi
+                echo "REMOTE_POSTGRES_URI=$(env_get "$RS_SECRETS_DIR/master.env" REMOTE_POSTGRES_URI)"
+                echo "REMOTE_COPY_INTERVAL=$(common_get REMOTE_COPY_INTERVAL 1800)"
+                echo "REMOTE_COPY_STATE=$RS_RUN/remote-copy-state.json"
             } >"$env_file"
             ;;
         rrolf)
