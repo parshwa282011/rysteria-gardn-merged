@@ -12,7 +12,7 @@
 //   /gardn/*   gardn: its page, client files and websocket, forwarded to the
 //              gardn server with the /gardn prefix removed
 //   /health    liveness
-// Settings come from ./.env (EDGE_PORT, CLIENT_DIR, GARDN_PORT) or the
+// Settings come from ./.env (EDGE_PORT, EDGE_BIND, CLIENT_DIR, GARDN_PORT) or the
 // environment. No dependencies: plain node.
 
 const http = require("http");
@@ -31,6 +31,8 @@ try {
 } catch (e) {}
 
 const PORT = Number(process.env.EDGE_PORT) || 8080;
+// 127.0.0.1 behind cloudflared (default); 0.0.0.0 to serve the internet directly (EDGE_BIND in edge.env)
+const BIND = process.env.EDGE_BIND || "127.0.0.1";
 const GARDN_PORT = Number(process.env.GARDN_PORT) || 9001;
 const CLIENT_DIR = path.resolve(process.env.CLIENT_DIR || "rrolf-client");
 // run (through sh) when gardn does not answer, at most once every minute: it starts gardn
@@ -185,7 +187,7 @@ server.on("upgrade", (req, socket, head) => {
     socket.on("close", () => upstream.destroy());
 });
 
-server.listen(PORT, "127.0.0.1", () => console.log(`edge listening on 127.0.0.1:${PORT}, client ${CLIENT_DIR}, gardn :${GARDN_PORT}`));
+server.listen(PORT, BIND, () => console.log(`edge listening on ${BIND}:${PORT}, client ${CLIENT_DIR}, gardn :${GARDN_PORT}`));
 // a bug in one request must not take the site down
 process.on("uncaughtException", (e) => console.error("edge: uncaught " + (e && e.stack || e)));
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => process.exit(0));

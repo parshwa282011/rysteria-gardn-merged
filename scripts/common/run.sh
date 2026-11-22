@@ -6,7 +6,8 @@
 # Each process runs in its own builds/<os>-<arch>/<name>/ folder and reads the
 # .env sitting there. Logs and pid files: builds/<os>-<arch>/run/
 #
-# Usage: scripts/<os>/run.sh [--dry-run]
+# Usage: [RS_ONLY="master gardn edge"] scripts/<os>/run.sh [--dry-run]
+#   RS_ONLY limits it to the named servers of servers.conf (cloudflared still starts if enabled)
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -97,6 +98,8 @@ for kind in master rrolf gardn edge copier; do
         name="${SV_NAME[$i]}"
         # built here, run by the other machine
         ! split_has SPLIT_BUILD_ONLY "$name" || continue
+        # RS_ONLY="master gardn edge" starts just those (the others stay as they are)
+        [ -z "${RS_ONLY:-}" ] || case " $RS_ONLY " in *" $name "*) ;; *) continue ;; esac
         case "$kind" in
         master)
             start "$name" ./rysteria-master --env .env
@@ -137,7 +140,13 @@ elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     [ -n "$tunnel_ref" ] || tunnel_ref="$tunnel_name"
     tunnel_yml="$RS_RUN/tunnel.yml"
     tunnel_creds="$(tunnel_credentials || true)"
-    log "cloudflared tunnel $tunnel_name for $domain"
+    # quic (UDP) is the better transport for a game: every request has its own stream, so one
+    # lost packet does not hold up all the others, as it does on the single TCP connection of
+    # http2. CLOUDFLARED_PROTOCOL in common.env: quic (default), http2 or auto. A quic that does
+    # not connect is replaced by http2 on the last of the three tries (a network that drops UDP)
+    tunnel_protocol="$(common_get CLOUDFLARED_PROTOCOL quic)"
+    case "$tunnel_protocol" in quic | http2 | auto) ;; *) warn "CLOUDFLARED_PROTOCOL=$tunnel_protocol is not quic, http2 or auto: using quic"; tunnel_protocol=quic ;; esac
+    log "cloudflared tunnel $tunnel_name for $domain ($tunnel_protocol)"
     if [ -z "$tunnel_creds" ] && [ "$RS_DRY_RUN" != 1 ]; then
         warn "no credentials file for the tunnel: TUNNEL_CREDENTIALS=$(common_get TUNNEL_CREDENTIALS) does not exist here, nor does ~/.cloudflared/$tunnel_name.json. Copy it from the machine that made the tunnel (cloudflared tunnel create). The game runs, but not through the tunnel"
     elif [ "$RS_DRY_RUN" != 1 ]; then
@@ -146,19 +155,21 @@ elif [ "$(common_get CLOUDFLARED_ENABLED)" = 1 ]; then
     if is_running cloudflared; then
         log "cloudflared already running"
     elif [ "$RS_DRY_RUN" = 1 ]; then
-        echo "[dry-run] nohup cloudflared tunnel --no-autoupdate --protocol http2 --config $tunnel_yml run $tunnel_ref"
+        echo "[dry-run] nohup cloudflared tunnel --no-autoupdate --protocol $tunnel_protocol --config $tunnel_yml run $tunnel_ref"
     elif [ -n "$tunnel_creds" ]; then
-        # TCP (http2) instead of QUIC: a network that drops UDP made the QUIC
-        # connections time out every few minutes. Started up to three times, and
-        # it has to register a connection with Cloudflare to count as started
+        # Started up to three times, and it has to register a connection with Cloudflare to
+        # count as started. The last try is over TCP (http2) whatever was asked: a network
+        # that drops UDP made the QUIC connections time out every few minutes
         tunnel_up=0
         wait_for_clock
         for attempt in 1 2 3; do
             seen=0
+            attempt_protocol="$tunnel_protocol"
+            [ "$attempt" != 3 ] || attempt_protocol=http2
             [ ! -f "$RS_RUN/cloudflared.log" ] || seen=$(wc -l <"$RS_RUN/cloudflared.log")
             (
                 cd "$RS_RUN" || exit 1
-                nohup cloudflared tunnel --no-autoupdate --protocol http2 --config "$tunnel_yml" run "$tunnel_ref" >>"$RS_RUN/cloudflared.log" 2>&1 &
+                nohup cloudflared tunnel --no-autoupdate --protocol "$attempt_protocol" --config "$tunnel_yml" run "$tunnel_ref" >>"$RS_RUN/cloudflared.log" 2>&1 &
                 echo $! >"$(pid_file cloudflared)"
             )
             for _ in $(seq 1 30); do

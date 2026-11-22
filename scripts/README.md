@@ -125,10 +125,14 @@ build fails or has PDEV in it, and never deploys uncommitted files (`--allow-dir
 
 ## The tunnel
 
-`run.sh` starts cloudflared over TCP (`--protocol http2`): QUIC (UDP) timed out every few minutes on a network
-that drops UDP, taking the site down with it. It waits for the first "Registered tunnel connection" and tries up
-to three times; when it cannot connect it says so, with the last lines of `run/cloudflared.log`, and the game
-keeps running locally. A missing credentials file is named in the warning.
+`run.sh` starts cloudflared over QUIC (`CLOUDFLARED_PROTOCOL=quic`, the default, in `common.env`): every request
+has its own stream, so one lost packet does not stall the others the way it does on the single TCP connection
+of `http2`. It waits for the first "Registered tunnel connection" and tries up to three times; the **third try
+is over `http2`** whatever was asked, because on a network that drops UDP QUIC timed out every few minutes.
+Set `CLOUDFLARED_PROTOCOL=http2` to use TCP from the start (or `auto`). When it cannot connect it says so, with
+the last lines of `run/cloudflared.log`, and the game keeps running locally. A missing credentials file is named
+in the warning. The "precheck" lines cloudflared writes into `cloudflared.log` when it starts say whether the
+network lets UDP through (`UDP Connectivity: QUIC connection successful`).
 
 ## When a game server dies
 

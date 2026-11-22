@@ -55,10 +55,12 @@ detect_platform() {
     Darwin) RS_OS=macos ;;
     Linux)
         # Debian family: Debian, Ubuntu, Raspberry Pi OS. WSL Ubuntu counts.
-        if [ -r /etc/os-release ] && grep -qiE 'debian|ubuntu|raspbian' /etc/os-release; then
+        # Red Hat family (Oracle Linux, Fedora, RHEL, Rocky, Alma) is treated the same for
+        # build and run (setup is scripts/oracle-cloud-init.sh, not debian/setup.sh)
+        if [ -r /etc/os-release ] && grep -qiE 'debian|ubuntu|raspbian|fedora|rhel|centos' /etc/os-release; then
             RS_OS=debian
         else
-            die "unsupported Linux (only Debian/Ubuntu/Raspberry Pi OS are supported)"
+            die "unsupported Linux (only Debian/Ubuntu/Raspberry Pi OS and Oracle Linux/RHEL are supported)"
         fi
         ;;
     *) die "unsupported OS $uname_s (on Windows use scripts/windows/*.ps1)" ;;
@@ -107,6 +109,18 @@ setup_build_env() {
     fi
     # emscripten's closure compiler needs Java 21+; a JRE unpacked in ~/.local/jdk21 (Debian 12 only has 17) comes first
     [ -x "$HOME/.local/jdk21/bin/java" ] && export PATH="$HOME/.local/jdk21/bin:$PATH"
+    # emsdk wants python 3.10+; Oracle Linux 9 only has 3.9 as python3, so python3.11/3.12 is used for it
+    if [ -z "${EMSDK_PYTHON:-}" ]; then
+        local py
+        for py in python3.12 python3.11 python3.13; do
+            command -v "$py" >/dev/null 2>&1 && { export EMSDK_PYTHON="$(command -v "$py")"; break; }
+        done
+    fi
+    # emcc itself starts "python3": when that is older than 3.10, put a newer one first in PATH (user's ~/.local/bin only)
+    if [ -n "${EMSDK_PYTHON:-}" ] && ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then
+        mkdir -p "$HOME/.local/bin" && ln -sf "$EMSDK_PYTHON" "$HOME/.local/bin/python3"
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
     # emsdk installed by debian/setup.sh
     if [ -f "$HOME/emsdk/emsdk_env.sh" ] && ! command -v emcc >/dev/null 2>&1; then
         # shellcheck disable=SC1091
@@ -282,6 +296,9 @@ CLOUDFLARED_ENABLED=0
 # its webmail through the tunnel. scripts/<os>/mail.sh setup turns this on.
 MAIL_ENABLED=0
 TUNNEL_NAME=rysteria
+# how cloudflared reaches Cloudflare: quic (UDP, default, best for a game), http2 (TCP,
+# for a network that drops UDP) or auto. quic that does not connect falls back to http2
+CLOUDFLARED_PROTOCOL=quic
 # the tunnel's id (cloudflared tunnel list), used instead of the name when set
 TUNNEL_ID=
 # the credentials json that "cloudflared tunnel create" wrote. ~ and \$HOME work,

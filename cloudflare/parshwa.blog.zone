@@ -1,0 +1,11 @@
+; Oracle game machine: import in Cloudflare DNS > Records > Import and export (delete the old tunnel CNAMEs of these names first)
+$ORIGIN parshwa.blog.
+api-game.parshwa.blog.	1	IN	A	129.146.250.114 ; cf_tags=cf-proxied:true
+hc-game.parshwa.blog.	1	IN	A	129.146.250.114 ; cf_tags=cf-proxied:true
+default-game.parshwa.blog.	1	IN	A	129.146.250.114 ; cf_tags=cf-proxied:true
+pvp-game.parshwa.blog.	1	IN	A	129.146.250.114 ; cf_tags=cf-proxied:true
+ga-game.parshwa.blog.	1	IN	A	129.146.250.114 ; cf_tags=cf-proxied:true
+garden-game.parshwa.blog.	1	IN	A	129.146.250.114 ; cf_tags=cf-proxied:true
+mini-game.parshwa.blog.	1	IN	A	129.146.250.114 ; cf_tags=cf-proxied:true
+ctf-game.parshwa.blog.	1	IN	A	129.146.250.114 ; cf_tags=cf-proxied:true
+game.parshwa.blog.	1	IN	A	129.146.250.114 ; cf_tags=cf-proxied:true
